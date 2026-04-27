@@ -40,6 +40,9 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jdk.internal.access.JavaSecurityProviderAccess;
+import jdk.internal.access.SharedSecrets;
+
 /**
  * This class represents a "provider" for the
  * Java Security API, where a provider implements some or all parts of
@@ -118,6 +121,26 @@ public abstract class Provider extends Properties {
 
     private static final sun.security.util.Debug debug =
         sun.security.util.Debug.getInstance("provider", "Provider");
+
+    static {
+        SharedSecrets.setJavaSecurityProviderAccess(
+                new JavaSecurityProviderAccess() {
+                    @Override
+                    public Set<Service> getServicesNotAllowed(Provider p) {
+                        return p.getServicesNotAllowed();
+                    }
+
+                    @Override
+                    public List<String> getAliases(Service svc) {
+                        return svc.getAliases();
+                    }
+
+                    @Override
+                    public boolean isAllowed(Service svc) {
+                        return svc.isAllowed();
+                    }
+                });
+    }
 
     /**
      * The provider name.
@@ -1203,6 +1226,18 @@ public abstract class Provider extends Properties {
         return serviceSet;
     }
 
+    /*
+     * This method returns an unmodifiable set of services that are supported by
+     * this provider but not allowed by the Providers filter (see
+     * sun.security.jca.ProvidersFilter). These services must not be used for
+     * anything other than informational purposes (see sun.launcher.SecuritySettings
+     * and the -XshowSettings:security:providers JVM argument).
+     */
+    private Set<Service> getServicesNotAllowed() {
+        // temporary mock: do not change default behavior - set is empty
+        return new LinkedHashSet<>();
+    }
+
     /**
      * Add a service. If a service of the same type with the same algorithm
      * name exists, and it was added using {@link #putService putService()},
@@ -1506,6 +1541,10 @@ public abstract class Provider extends Properties {
         private Map<UString,String> attributes;
         private final EngineDescription engineDescription;
 
+        // Cache with the Providers filter decision for this service. Value is null when
+        // not decided.
+        private Boolean isAllowed;
+
         // Reference to the cached implementation Class object.
         // Will be a Class if this service is loaded from the built-in
         // classloader (unloading not possible), otherwise a WeakReference to a
@@ -1622,6 +1661,19 @@ public abstract class Provider extends Properties {
                     this.attributes.put(new UString(entry.getKey()), entry.getValue());
                 }
             }
+        }
+
+        /*
+         * Returns whether the service is allowed or not according to the Providers
+         * filter. This decision is usually made when a service instance is added to a
+         * services map, and then cached. However, some Providers may override
+         * Provider::getService or Provider::getServices and return Service instances
+         * that did not go through the filter before. In any case, if the service did
+         * not go through the filter, evaluate it now and save the result.
+         */
+        private boolean isAllowed() {
+            // temporary mock: do not change default behavior
+            return true;
         }
 
         /**
