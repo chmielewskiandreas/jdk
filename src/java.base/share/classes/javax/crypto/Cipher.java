@@ -44,6 +44,7 @@ import java.nio.ReadOnlyBufferException;
 
 import sun.security.util.Debug;
 import sun.security.jca.*;
+import sun.security.util.AlgorithmDecomposer;
 import sun.security.util.KnownOIDs;
 import sun.security.util.CryptoAlgorithmConstraints;
 
@@ -286,33 +287,6 @@ public class Cipher {
         this.lock = new Object();
     }
 
-    // for special handling SHA-512/224, SHA-512/256, SHA512/224, SHA512/256
-    static int indexOfRealSlash(String s, int fromIndex) {
-        while (true) {
-            int pos = s.indexOf('/', fromIndex);
-            // 512/2
-            if (pos > 3 && pos + 1 < s.length()
-                    && s.charAt(pos - 3) == '5'
-                    && s.charAt(pos - 2) == '1'
-                    && s.charAt(pos - 1) == '2'
-                    && s.charAt(pos + 1) == '2') {
-                fromIndex = pos + 1;
-                // see 512/2, find next
-            } else {
-                return pos;
-            }
-        }
-    }
-
-    static String reqNonEmpty(String in, String msg)
-            throws NoSuchAlgorithmException {
-        in = in.trim();
-        if (in.isEmpty()) {
-            throw new NoSuchAlgorithmException(msg);
-        }
-        return in;
-    }
-
     // Parse the specified cipher transformation for algorithm and the
     // optional mode and padding. If the transformation contains only
     // algorithm, then only algorithm is returned. Otherwise, the
@@ -323,42 +297,13 @@ public class Cipher {
             throw new NoSuchAlgorithmException("No transformation given");
         }
 
-        /*
-         * Components of a cipher transformation:
-         *
-         * 1) algorithm component (e.g., AES)
-         * 2) feedback component (e.g., CFB) - optional
-         * 3) padding component (e.g., PKCS5Padding) - optional
-         */
-        int endIdx = indexOfRealSlash(transformation, 0);
-        if (endIdx == -1) { // algo only, done
-            return new String[] { reqNonEmpty(transformation,
-                        "Invalid transformation: algorithm not specified")
-            };
+        String[] tokens = AlgorithmDecomposer.tokenizeTransformation(transformation);
+        if (tokens.length != 1 && tokens.length != 3) {
+            throw new NoSuchAlgorithmException("Invalid transformation " +
+                    "format: " + transformation);
         }
-        // must be algo/mode/padding
-        String algo = reqNonEmpty(transformation.substring(0, endIdx),
-                    "Invalid transformation: algorithm not specified");
 
-        int startIdx = endIdx + 1;
-        endIdx = indexOfRealSlash(transformation, startIdx);
-        if (endIdx == -1) {
-            throw new NoSuchAlgorithmException(
-                    "Invalid transformation format: " + transformation);
-        }
-        String mode = reqNonEmpty(transformation.substring(startIdx,
-                endIdx), "Invalid transformation: missing mode");
-
-        startIdx = endIdx + 1;
-        endIdx = indexOfRealSlash(transformation, startIdx);
-        if (endIdx == -1) {
-            return new String[] { algo, mode,
-                    reqNonEmpty(transformation.substring(startIdx),
-                            "Invalid transformation: missing padding") };
-        } else {
-            throw new NoSuchAlgorithmException(
-                    "Invalid transformation format: " + transformation);
-        }
+        return tokens;
     }
 
     // Provider attribute name for supported chaining mode

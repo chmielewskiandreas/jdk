@@ -25,6 +25,7 @@
 
 package sun.security.util;
 
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -171,4 +172,138 @@ public class AlgorithmDecomposer {
     static String decomposeDigestName(String algorithm) {
         return DECOMPOSED_DIGEST_NAMES.getOrDefault(algorithm, algorithm);
     }
+
+    /**
+     * Finds the index of the next {@code '/'} character in the given string that
+     * acts as a real transformation separator.
+     *
+     * <p>
+     * This method skips {@code '/'} characters that are part of certain algorithm
+     * names, specifically the truncated SHA-512 variants
+     * {@code SHA512/224}, {@code SHA512/256}, {@code SHA-512/224}, and
+     * {@code SHA-512/256}, where {@code '/'} belongs to the algorithm name
+     * itself rather than separating transformation components.
+     *
+     * <p>
+     * The search starts at {@code fromIndex} and continues until either a
+     * non-embedded {@code '/'} is found or no further {@code '/'} exists.
+     *
+     * @param s         the string to search
+     * @param fromIndex the index at which to start searching
+     * @return the index of the next real {@code '/'} character, or {@code -1}
+     *         if none is found
+     */
+    static int indexOfRealSlash(String s, int fromIndex) {
+        while (true) {
+            int pos = s.indexOf('/', fromIndex);
+            // 512/2
+            if (pos > 3 && pos + 1 < s.length()
+                    && s.charAt(pos - 3) == '5'
+                    && s.charAt(pos - 2) == '1'
+                    && s.charAt(pos - 1) == '2'
+                    && s.charAt(pos + 1) == '2') {
+                fromIndex = pos + 1;
+                // see 512/2, find next
+            } else {
+                return pos;
+            }
+        }
+    }
+
+    /**
+     * Trims the given string and verifies that it is not empty.
+     *
+     * <p>
+     * If the trimmed string is empty, this method throws a
+     * {@link NoSuchAlgorithmException} using the supplied message.
+     *
+     * @param in  the input string to validate
+     * @param msg the exception message to use if the input is empty
+     * @return the trimmed, non-empty string
+     * @throws NoSuchAlgorithmException if the trimmed input string is empty
+     */
+    static String reqNonEmpty(String in, String msg)
+            throws NoSuchAlgorithmException {
+        in = in.trim();
+        if (in.isEmpty()) {
+            throw new NoSuchAlgorithmException(msg);
+        }
+        return in;
+    }
+
+    /**
+     * Decomposes a cipher transformation string into its components.
+     *
+     * <p>
+     * The transformation string is split using {@code '/'} as a separator into
+     * algorithm, mode (or feedback), and padding components, in that order.
+     * The following forms are supported:
+     *
+     * <ul>
+     * <li>{@code algorithm}</li>
+     * <li>{@code algorithm/mode}</li>
+     * <li>{@code algorithm/mode/padding}</li>
+     * </ul>
+     *
+     * <p>
+     * All components must be non-empty after trimming whitespace.
+     * Transformations with missing components or with more than two separators
+     * are considered invalid.
+     *
+     * <p>
+     * Some standard algorithm names include {@code '/'} as part of the
+     * algorithm name itself (for example, truncated SHA-512 variants such as
+     * {@code SHA512/224}, {@code SHA512/256}, {@code SHA-512/224}, and
+     * {@code SHA-512/256}). This method accounts for those cases to avoid
+     * mis-parsing and preserves the algorithm name as a single component.
+     *
+     * @param transformation the transformation string to be decomposed
+     * @return an array containing the transformation components
+     * @throws NoSuchAlgorithmException if {@code transformation} is {@code null},
+     *                                  contains empty components, or has an invalid
+     *                                  format
+     */
+    public static String[] tokenizeTransformation(String transformation)
+            throws NoSuchAlgorithmException {
+
+        Objects.requireNonNull(transformation, "transformation");
+
+        String s = transformation.trim();
+
+        int firstSep = indexOfRealSlash(s, 0);
+        if (firstSep == -1) {
+            return new String[] {
+                    reqNonEmpty(s, "Invalid transformation: algorithm not specified")
+            };
+        }
+
+        String algorithm = reqNonEmpty(
+                s.substring(0, firstSep),
+                "Invalid transformation: algorithm not specified");
+
+        int secondSep = indexOfRealSlash(s, firstSep + 1);
+        if (secondSep == -1) {
+            String mode = reqNonEmpty(
+                    s.substring(firstSep + 1),
+                    "Invalid transformation: missing mode");
+            return new String[] { algorithm, mode };
+        }
+
+        int thirdSep = indexOfRealSlash(s, secondSep + 1);
+        if (thirdSep != -1) {
+            throw new NoSuchAlgorithmException(
+                    "Invalid transformation format: " + transformation);
+        }
+
+        String mode = reqNonEmpty(
+                s.substring(firstSep + 1, secondSep),
+                "Invalid transformation: missing mode");
+
+        String padding = reqNonEmpty(
+                s.substring(secondSep + 1),
+                "Invalid transformation: missing padding");
+
+        return new String[] { algorithm, mode, padding };
+    }
+
 }
