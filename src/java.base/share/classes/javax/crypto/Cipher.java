@@ -425,6 +425,28 @@ public class Cipher {
         return null;
     }
 
+    private static Service tryGetService(Provider p, String canonicalTransform,
+            String svcSearchKey) {
+        ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
+                canonicalTransform, svcSearchKey);
+        try (ct) {
+            Service s = p.getService("Cipher", svcSearchKey);
+            if (s == null || !ProvidersFilter.isAllowed(s)) {
+                return null;
+            }
+            return s;
+        }
+    }
+
+    private static Object newInstance(Service s, String canonicalTransform,
+            String svcSearchKey) throws NoSuchAlgorithmException {
+        ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
+                canonicalTransform, svcSearchKey);
+        try (ct) {
+            return s.newInstance(null);
+        }
+    }
+
     /**
      * Returns a {@code Cipher} object that implements the specified
      * transformation.
@@ -500,13 +522,14 @@ public class Cipher {
         }
 
         List<Transform> transforms = getTransforms(transformation);
+        String canonicalTransform = transforms.getFirst().transform;
         List<ServiceId> cipherServices = new ArrayList<>(transforms.size());
         for (Transform transform : transforms) {
             cipherServices.add(new ServiceId("Cipher", transform.transform));
         }
         // make sure there is at least one service from a signed provider
         // and that it can use the specified mode and padding
-        Iterator<Service> t = GetInstance.getServices(cipherServices);
+        Iterator<Service> t = GetInstance.getCipherServices(cipherServices);
         Exception failure = null;
         while (t.hasNext()) {
             Service s = t.next();
@@ -527,7 +550,8 @@ public class Cipher {
             // even when mode and padding are both supported, they
             // may not be used together, try out and see if it works
             try {
-                CipherSpi spi = (CipherSpi)s.newInstance(null);
+                CipherSpi spi = (CipherSpi) newInstance(s, canonicalTransform,
+                        tr.transform);
                 tr.setModePadding(spi);
                 // specify null instead of spi for delayed provider selection
                 return new Cipher(null, s, t, transformation, transforms);
@@ -703,10 +727,12 @@ public class Cipher {
 
         Exception failure = null;
         List<Transform> transforms = getTransforms(transformation);
+        String canonicalTransform = transforms.getFirst().transform;
         boolean providerChecked = false;
         String paddingError = null;
         for (Transform tr : transforms) {
-            Service s = provider.getService("Cipher", tr.transform);
+            Service s = tryGetService(provider, canonicalTransform,
+                    tr.transform);
             if (s == null) {
                 continue;
             }
@@ -731,7 +757,8 @@ public class Cipher {
                 continue;
             }
             try {
-                CipherSpi spi = (CipherSpi)s.newInstance(null);
+                CipherSpi spi = (CipherSpi) newInstance(s, canonicalTransform,
+                        tr.transform);
                 tr.setModePadding(spi);
                 Cipher cipher = new Cipher(spi, transformation);
                 cipher.provider = s.getProvider();
@@ -798,6 +825,7 @@ public class Cipher {
                     new Exception("Call trace").printStackTrace();
                 }
             }
+            String canonicalTransform = transforms.getFirst().transform;
             Exception lastException = null;
             while ((firstService != null) || serviceIterator.hasNext()) {
                 Service s;
@@ -824,7 +852,8 @@ public class Cipher {
                 }
                 try {
                     if (thisSpi == null) {
-                        Object obj = s.newInstance(null);
+                        Object obj = newInstance(s, canonicalTransform,
+                                tr.transform);
                         if (obj instanceof CipherSpi == false) {
                             continue;
                         }
@@ -892,6 +921,7 @@ public class Cipher {
                 implInit(spi, initType, opmode, key, paramSpec, params, random);
                 return;
             }
+            String canonicalTransform = transforms.getFirst().transform;
             Exception lastException = null;
             while ((firstService != null) || serviceIterator.hasNext()) {
                 Service s;
@@ -922,7 +952,8 @@ public class Cipher {
                 }
                 try {
                     if (thisSpi == null) {
-                        thisSpi = (CipherSpi)s.newInstance(null);
+                        thisSpi = (CipherSpi) newInstance(s, canonicalTransform,
+                                tr.transform);
                     }
                     tr.setModePadding(thisSpi);
                     initCryptoPermission();
