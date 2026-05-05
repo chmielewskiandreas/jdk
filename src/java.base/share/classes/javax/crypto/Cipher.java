@@ -425,24 +425,36 @@ public class Cipher {
         return null;
     }
 
-    private static Service tryGetService(Provider p, String canonicalTransform,
-            String svcSearchKey) {
-        ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
-                canonicalTransform, svcSearchKey);
-        try (ct) {
+    /**
+     * Attempts to locate a Cipher service from the given provider using the
+     * specified service search key.
+     *
+     * <p>
+     * A {@link ProvidersFilter.CipherTransformation} context is established for the
+     * duration of the lookup so that transformation-aware Providers Filter checks
+     * are applied consistently.
+     */
+    private static Service tryGetService(Provider p, String canonicalTransform, String svcSearchKey) {
+        try (ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
+                canonicalTransform, svcSearchKey)) {
             Service s = p.getService("Cipher", svcSearchKey);
-            if (s == null || !ProvidersFilter.isAllowed(s)) {
-                return null;
-            }
-            return s;
+            return (s != null && ProvidersFilter.isAllowed(s)) ? s : null;
         }
     }
 
+    /**
+     * Instantiates the given Cipher service under the specified transformation
+     * context.
+     *
+     * <p>
+     * A {@link ProvidersFilter.CipherTransformation} context is established for the
+     * duration of instantiation so that transformation-aware Providers Filter
+     * checks are applied consistently.
+     */
     private static Object newInstance(Service s, String canonicalTransform,
             String svcSearchKey) throws NoSuchAlgorithmException {
-        ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
-                canonicalTransform, svcSearchKey);
-        try (ct) {
+        try (ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
+                canonicalTransform, svcSearchKey)) {
             return s.newInstance(null);
         }
     }
@@ -731,8 +743,7 @@ public class Cipher {
         boolean providerChecked = false;
         String paddingError = null;
         for (Transform tr : transforms) {
-            Service s = tryGetService(provider, canonicalTransform,
-                    tr.transform);
+            Service s = tryGetService(provider, canonicalTransform, tr.transform);
             if (s == null) {
                 continue;
             }
@@ -757,8 +768,7 @@ public class Cipher {
                 continue;
             }
             try {
-                CipherSpi spi = (CipherSpi) newInstance(s, canonicalTransform,
-                        tr.transform);
+                CipherSpi spi = (CipherSpi) newInstance(s, canonicalTransform, tr.transform);
                 tr.setModePadding(spi);
                 Cipher cipher = new Cipher(spi, transformation);
                 cipher.provider = s.getProvider();
@@ -852,8 +862,7 @@ public class Cipher {
                 }
                 try {
                     if (thisSpi == null) {
-                        Object obj = newInstance(s, canonicalTransform,
-                                tr.transform);
+                        Object obj = newInstance(s, canonicalTransform, tr.transform);
                         if (obj instanceof CipherSpi == false) {
                             continue;
                         }
