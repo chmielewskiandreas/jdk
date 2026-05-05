@@ -732,11 +732,11 @@ public abstract class Provider extends Properties {
 
     // Set<Service>
     // Unmodifiable set of allowed services. Initialized on demand.
-    private transient volatile Set<Service> allowedSet;
+    private transient volatile Set<Service> allowedServiceSet;
 
     // Set<Service>
     // Unmodifiable set of not allowed services. Initialized on demand.
-    private transient volatile Set<Service> notAllowedSet;
+    private transient volatile Set<Service> notAllowedServiceSet;
 
     // register the id attributes for this provider
     // this is to ensure that equals() and hashCode() do not incorrectly
@@ -960,8 +960,8 @@ public abstract class Provider extends Properties {
         serviceMap.clear();
         legacyChanged = false;
         servicesChanged = false;
-        allowedSet = null;
-        notAllowedSet = null;
+        allowedServiceSet = null;
+        notAllowedServiceSet = null;
         prngAlgos.clear();
         super.clear();
         putId();
@@ -1046,15 +1046,15 @@ public abstract class Provider extends Properties {
                     if (prevAliasService != null) {
                         prevAliasService.removeAlias(aliasAlg);
                     }
-                    boolean isNewService = stdService == null;
+                    boolean isNewService = (stdService == null);
                     if (isNewService) {
                         stdService = new Service(this, type, value);
                     }
                     stdService.addAlias(aliasAlg);
                     // The new alias can modify the Providers filter decision.
                     stdService.computeSvcAllowed();
-                    if (stdService.cipherTransformsAllowed != null) {
-                        stdService.cipherTransformsAllowed.clear();
+                    if (stdService.cipherTransformsAllowedCache != null) {
+                        stdService.cipherTransformsAllowedCache.clear();
                     }
                     if (isNewService) {
                         // add standard mapping in order to add alias
@@ -1066,8 +1066,8 @@ public abstract class Provider extends Properties {
                     if (stdService != null) {
                         // The removed alias can modify the Providers filter decision.
                         stdService.computeSvcAllowed();
-                        if (stdService.cipherTransformsAllowed != null) {
-                            stdService.cipherTransformsAllowed.clear();
+                        if (stdService.cipherTransformsAllowedCache != null) {
+                            stdService.cipherTransformsAllowedCache.clear();
                         }
                     }
                     legacyMap.remove(aliasKey);
@@ -1095,9 +1095,9 @@ public abstract class Provider extends Properties {
                                 "className can't be null");
                         if (stdService == null) {
                             stdService = new Service(this, type, stdAlg);
-                            // Note: if the service exists already, recomputing Service::isAllowed is not
-                            // necessary because a change in the class name does not affect the previous
-                            // filter decision.
+                            // Note: recomputing Service::isAllowed is unnecessary for an existing service;
+                            // a change to the implementation class name does not affect the filter
+                            // decision.
                             stdService.computeSvcAllowed();
                             legacyMap.put(stdKey, stdService);
                         }
@@ -1251,45 +1251,70 @@ public abstract class Provider extends Properties {
     public Set<Service> getServices() {
         checkInitialized();
         computeServiceSets();
-        return allowedSet;
+        return allowedServiceSet;
     }
 
     /*
-     * This method returns an unmodifiable set of services that are supported by
-     * this provider but not allowed by the Providers filter (see
-     * sun.security.jca.ProvidersFilter). These services must not be used for
-     * anything other than informational purposes (see sun.launcher.SecuritySettings
-     * and the -XshowSettings:security:providers JVM argument).
+     * Returns an unmodifiable set of services that are supported by this provider
+     * but not allowed by the Providers Filter (see
+     * sun.security.jca.ProvidersFilter).
+     *
+     * Services in this set are excluded by policy and must not be used for
+     * instantiation or functional purposes. They are exposed only for
+     * informational and diagnostic use (for example, by
+     * sun.launcher.SecuritySettings and the -XshowSettings:security:providers
+     * option).
      */
     private Set<Service> getServicesNotAllowed() {
         checkInitialized();
         computeServiceSets();
-        return notAllowedSet;
+        return notAllowedServiceSet;
     }
 
-    // TODO: add documentation
+    private boolean needsRecomputation() {
+        return allowedServiceSet == null
+                || notAllowedServiceSet == null
+                || servicesChanged
+                || legacyChanged;
+    }
+
+    /*
+     * Computes and caches the sets of services that are allowed and not allowed
+     * by the Providers Filter.
+     */
     private void computeServiceSets() {
-        if (allowedSet == null || notAllowedSet == null ||
-                legacyChanged || servicesChanged) {
-            Set<Service> newAllowedSet = new LinkedHashSet<>();
-            Set<Service> newNotAllowedSet = new LinkedHashSet<>();
-            classifyServices(serviceMap, newAllowedSet, newNotAllowedSet);
-            classifyServices(legacyMap, newAllowedSet, newNotAllowedSet);
-            allowedSet = Collections.unmodifiableSet(newAllowedSet);
-            notAllowedSet = Collections.unmodifiableSet(newNotAllowedSet);
-            servicesChanged = false;
-            legacyChanged = false;
+        if (!needsRecomputation()) {
+            return;
         }
+
+        Set<Service> newAllowedSet = new LinkedHashSet<>();
+        Set<Service> newNotAllowedSet = new LinkedHashSet<>();
+
+        classifyServices(serviceMap, newAllowedSet, newNotAllowedSet);
+        classifyServices(legacyMap, newAllowedSet, newNotAllowedSet);
+
+        allowedServiceSet = Collections.unmodifiableSet(newAllowedSet);
+        notAllowedServiceSet = Collections.unmodifiableSet(newNotAllowedSet);
+
+        servicesChanged = false;
+        legacyChanged = false;
     }
 
-    // TODO: add documentation
-    private static void classifyServices(Map<ServiceKey, Service> map,
-            Set<Service> allowedSvcs, Set<Service> notAllowedSvcs) {
-        if (!map.isEmpty()) {
-            for (Service svc : map.values()) {
-                if (svc.isValid()) {
-                    (svc.isAllowed() ? allowedSvcs : notAllowedSvcs).add(svc);
-                }
+    /*
+     * Classifies valid services from the given map into allowed and not-allowed
+     * sets according to the Providers Filter.
+     */
+    private static void classifyServices(Map<ServiceKey, Service> map, Set<Service> allowedServices,
+            Set<Service> notAllowedServices) {
+        for (Service svc : map.values()) {
+            if (!svc.isValid()) {
+                continue;
+            }
+
+            if (svc.isAllowed()) {
+                allowedServices.add(svc);
+            } else {
+                notAllowedServices.add(svc);
             }
         }
     }
@@ -1609,15 +1634,18 @@ public abstract class Provider extends Properties {
         private Map<UString,String> attributes;
         private final EngineDescription engineDescription;
 
-        // Cache with the Providers filter decision for this service. Value is null when
-        // not decided.
+        // Cache of the Providers Filter decision for this service. A value of null
+        // indicates that the allow/deny decision has not yet been evaluated.
         private Boolean isAllowed;
 
-        // Cache with transformation - filter decision entries. Transformations in this
-        // cache are based on this service algorithm or aliases, but are not necessarily
-        // supported (further evaluation is needed). For Cipher service types only
-        // (lazily initialized), null otherwise.
-        private Map<String, Boolean> cipherTransformsAllowed;
+        // Cache mapping full Cipher transformations to the result of the Providers
+        // Filter evaluation. The transformations cached here are derived from this
+        // service algorithm and its aliases and represent potential Cipher semantics.
+        // A cached "allowed" result means the transformation is permitted by policy,
+        // but does not imply that the service actually implements or supports it;
+        // implementation and capability checks are performed later. Used for Cipher
+        // services only (lazily initialized), null otherwise.
+        private Map<String, Boolean> cipherTransformsAllowedCache;
 
         // Reference to the cached implementation Class object.
         // Will be a Class if this service is loaded from the built-in
@@ -1738,41 +1766,46 @@ public abstract class Provider extends Properties {
         }
 
         /*
-         * Returns whether the service is allowed or not according to the Providers
-         * filter. This decision is usually made when a service instance is added to a
-         * services map, and then cached. However, some Providers may override
+         * Returns whether this service is allowed by the Providers Filter.
+         *
+         * The allow/deny decision is typically computed when the service is first
+         * registered and then cached. However, some providers may override
          * Provider::getService or Provider::getServices and return Service instances
-         * that did not go through the filter before. In any case, if the service did
-         * not go through the filter, evaluate it now and save the result.
+         * that have not been evaluated by the filter yet.
+         *
+         * In addition, during a Cipher transformation lookup, the allow/deny decision
+         * may depend on the full transformation semantics (algorithm/mode/padding)
+         * rather than only on the service algorithm or aliases. In such cases, the
+         * decision is deferred and evaluated here using the active Cipher context.
          */
         private boolean isAllowed() {
             ProvidersFilter.CipherContext cipherContext = ProvidersFilter.CipherTransformation.getContext();
             if (cipherContext != null) {
-                // The Cipher class is trying to create a CipherSpi instance from a service.
-                // E.g. Cipher.getInstance("transformation"). The service algorithm and aliases
-                // do not match the transformation exactly. However, there could still be
-                // support for it. Evaluate the transformation according to the filter and see
-                // if the service remains on track for further assessment (e.g.
-                // Cipher.Transform::supports).
-                if ((cipherTransformsAllowed != null ||
-                        type.equals("Cipher")) &&
-                        isTransformationForSvc(cipherContext.svcSearchKey())) {
-                    return isTransformationAllowed(
+                // A Cipher lookup is in progress (e.g. Cipher.getInstance(...)). The service
+                // algorithm or aliases do not match the transformation exactly, but the service
+                // may still support it. In this case, evaluate the transformation-specific
+                // filter decision first.
+                if ((cipherTransformsAllowedCache != null
+                        || type.equals("Cipher"))
+                        && isTransformationForSvc(cipherContext.svcSearchKey())) {
+                    return isCipherTransformationAllowedForService(
                             cipherContext.transformation());
                 } else {
-                    // Unlikely. May happen if a provider overrides Provider::getService or
-                    // Provider.Service::newInstance and, during a Cipher service lookup, triggers a
-                    // Provider.Service::isAllowed call for a service not related to the Cipher
-                    // transformation.
+                    // Unlikely scenario: A Cipher transformation lookup is in progress, but this
+                    // service does not correspond to the transformation search key. This can occur
+                    // if a provider returns additional Service instances during a Cipher lookup. In
+                    // this case, skip transformation-specific evaluation and rely on the
+                    // service-level check.
                     if (debug != null) {
-                        debug.println("Filter evaluation of a service not " +
-                                "related to a Cipher transformation (" +
-                                cipherContext.transformation() + "). Service " +
-                                "search key: " + cipherContext.svcSearchKey() +
-                                ". Service: " + this);
+                        debug.println("Filter evaluation of a service not related to a " +
+                                "Cipher transformation (" +
+                                cipherContext.transformation() + "). Service search key: " +
+                                cipherContext.svcSearchKey() + ". Service: " + this);
                     }
+
                 }
             }
+            // Evaluate the regular service-level filter decision if needed.
             if (isAllowed == null) {
                 computeSvcAllowed();
             }
@@ -1795,46 +1828,67 @@ public abstract class Provider extends Properties {
             return false;
         }
 
-        /*
-         * Returns whether a transformation potentially supported by this service is
-         * allowed by the Providers filter. Service algorithm and aliases are used to
-         * build transformation aliases.
+        /**
+         * Determines whether the given Cipher transformation is allowed for this
+         * service according to the providers filter.
+         *
+         * The decision is based on the full transformation semantics
+         * (algorithm/mode/padding). Since Cipher services may be registered under
+         * partial algorithm names or aliases, equivalent transformation aliases are
+         * derived from the service algorithm and its aliases and evaluated together.
          */
-        private boolean isTransformationAllowed(String transformation) {
-            Boolean isTransformAllowed;
-            if (cipherTransformsAllowed == null) {
-                cipherTransformsAllowed = new ConcurrentHashMap<>();
-                isTransformAllowed = null;
-            } else {
-                isTransformAllowed = cipherTransformsAllowed.get(transformation);
+        private boolean isCipherTransformationAllowedForService(String transformation) {
+            if (cipherTransformsAllowedCache == null) {
+                cipherTransformsAllowedCache = new ConcurrentHashMap<>();
             }
-            if (isTransformAllowed == null) {
-                String[] transformParts = AlgorithmDecomposer.tokenizeTransformation(transformation);
-                // transformParts has three non-empty components because transformation 1) was
-                // analyzed by Cipher::tokenizeTransformation before and 2) if it had have a
-                // single component, it would have been equal to the service algorithm or alias
-                // and not set by ProvidersFilter.CipherTransformation to reach this point.
-                assert transformParts.length == 3 : "Unexpected transformation.";
-                List<String> allAlgos = new ArrayList<>(getAliases().size() + 1);
-                allAlgos.add(algorithm);
-                allAlgos.addAll(getAliases());
-                List<String> tAliases = new ArrayList<>(allAlgos.size() - 1);
-                for (String algo : allAlgos) {
-                    // If a service algorithm or alias has multiple components, use the first one
-                    // for the transformation alias. The second and third one (if any) are assumed
-                    // to be the mode and padding respectively, and taken from the transformation.
-                    algo = AlgorithmDecomposer.tokenizeTransformation(algo)[0];
-                    String transformAlgo = algo + "/" + transformParts[1] +
-                            "/" + transformParts[2];
-                    if (!transformAlgo.equalsIgnoreCase(transformation)) {
-                        tAliases.add(transformAlgo);
-                    }
+
+            Boolean cached = cipherTransformsAllowedCache.get(transformation);
+            if (cached != null) {
+                return cached;
+            }
+
+            // Decompose the canonical transformation (alg/mode/padding)
+            String[] transformationParts = AlgorithmDecomposer.tokenizeTransformation2(transformation);
+
+            // Reaching this point guarantees a full transformation:
+            // - the transformation was normalized by
+            // AlgorithmDecomposer.tokenizeTransformation beforehand, and
+            // - single-component names would have matched the service algorithm or alias
+            // and would not reach this method.
+            assert transformationParts.length == 3 : "Unexpected transformation.";
+
+            String mode = transformationParts[1];
+            String padding = transformationParts[2];
+
+            List<String> serviceNames = new ArrayList<>(getAliases().size() + 1);
+            serviceNames.add(algorithm);
+            serviceNames.addAll(getAliases());
+
+            List<String> transformationAliases = new ArrayList<>(serviceNames.size() - 1);
+
+            for (String name : serviceNames) {
+                // Service algorithm names and aliases may themselves be composite.
+                // When constructing equivalent Cipher transformation aliases, only
+                // the base algorithm component is taken from the service name.
+                // Mode and padding are always taken from the evaluated transformation
+                // to preserve identical Cipher semantics.
+                String baseAlgo = AlgorithmDecomposer.tokenizeTransformation2(name)[0];
+
+                String aliasTransform = baseAlgo + "/" + mode + "/" + padding;
+
+                if (!aliasTransform.equalsIgnoreCase(transformation)) {
+                    transformationAliases.add(aliasTransform);
                 }
-                isTransformAllowed = ProvidersFilter.computeSvcAllowed(
-                        provider.getName(), type, transformation, tAliases);
-                cipherTransformsAllowed.put(transformation, isTransformAllowed);
             }
-            return isTransformAllowed;
+
+            boolean allowed = ProvidersFilter.computeSvcAllowed(
+                    provider.getName(),
+                    type,
+                    transformation,
+                    transformationAliases);
+
+            cipherTransformsAllowedCache.put(transformation, allowed);
+            return allowed;
         }
 
         /*
