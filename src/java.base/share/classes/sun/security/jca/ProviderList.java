@@ -400,7 +400,18 @@ public final class ProviderList {
         return new ServiceIterator(ids);
     }
 
-    // TODO: docu
+    /**
+     * Returns an iterator over candidate Cipher services matching the given
+     * service identifiers.
+     *
+     * This is an internal JCA/JCE helper used during Cipher service lookup.
+     * The iterator performs a lazy traversal of providers in preference
+     * order and yields services of type "Cipher" whose algorithm or alias
+     * matches one of the specified identifiers.
+     *
+     * The returned services are candidates only; additional checks (for
+     * example, policy or filter evaluation) may be applied by the caller.
+     */
     public Iterator<Service> getCipherServices(List<ServiceId> ids) {
         return new CipherServiceIterator(ids);
     }
@@ -519,12 +530,19 @@ public final class ProviderList {
             }
         }
 
+        /**
+         * Attempts to retrieve a service of the given type and algorithm from the
+         * specified provider, returning {@code null} if no matching service is found or
+         * if the service is not allowed.
+         *
+         * <p>
+         * Subclasses override this method to customize lookup behavior (for example, by
+         * establishing a transformation context) while preserving the overall iteration
+         * logic.
+         */
         Service tryGetService(Provider p, String type, String algorithm) {
-            Service s = p.getService(type, algorithm);
-            if (s == null || !ProvidersFilter.isAllowed(s)) {
-                return null;
-            }
-            return s;
+            Service s = p.getService("Cipher", algorithm);
+            return (s != null && ProvidersFilter.isAllowed(s)) ? s : null;
         }
 
         int index;
@@ -550,6 +568,22 @@ public final class ProviderList {
         }
     }
 
+    /**
+     * Iterator over Cipher services that applies transformation-aware Providers
+     * Filter evaluation during service lookup.
+     *
+     * <p>
+     * Uses the first {@code ServiceId} as the canonical transformation (for
+     * example, "AES/CBC/PKCS5Padding") and applies it consistently across all
+     * lookup attempts, while subsequent identifiers serve as alternative lookup
+     * keys (e.g., aliases or algorithm-only forms).
+     *
+     * <p>
+     * Overrides {@link ServiceIterator#tryGetService} to establish a
+     * {@link ProvidersFilter.CipherTransformation} context for each lookup,
+     * ensuring that filter decisions are based on the original requested
+     * transformation rather than the current lookup key.
+     */
     private final class CipherServiceIterator extends ServiceIterator {
         private final String canonicalTransform;
 
@@ -560,9 +594,8 @@ public final class ProviderList {
 
         @Override
         Service tryGetService(Provider p, String type, String algorithm) {
-            ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
-                    canonicalTransform, algorithm);
-            try (ct) {
+            try (ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
+                    canonicalTransform, algorithm)) {
                 return super.tryGetService(p, type, algorithm);
             }
         }
