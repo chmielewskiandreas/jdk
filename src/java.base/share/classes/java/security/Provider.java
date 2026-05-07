@@ -1796,46 +1796,73 @@ public abstract class Provider extends Properties {
             return false;
         }
 
-        /*
-         * Returns whether a transformation potentially supported by this service is
-         * allowed by the Providers filter. Service algorithm and aliases are used to
-         * build transformation aliases.
+        /**
+         * Determine whether the given Cipher transformation is allowed for this service
+         * according to the providers filter.
+         *
+         * The decision is based on the full transformation semantics
+         * (algorithm/mode/padding). Since Cipher services may be registered under
+         * partial algorithm names or aliases, equivalent transformation aliases are
+         * derived from the service algorithm and its aliases and evaluated together.
          */
         private boolean isTransformationAllowed(String transformation) {
-            Boolean isTransformAllowed;
+            Boolean isAllowed;
             if (cipherTransformsAllowed == null) {
                 cipherTransformsAllowed = new ConcurrentHashMap<>();
-                isTransformAllowed = null;
+                isAllowed = null;
             } else {
-                isTransformAllowed = cipherTransformsAllowed.get(transformation);
+                isAllowed = cipherTransformsAllowed.get(transformation);
             }
-            if (isTransformAllowed == null) {
-                String[] transformParts = AlgorithmDecomposer.tokenizeTransformation(transformation);
-                // transformParts has three non-empty components because transformation 1) was
-                // analyzed by Cipher::tokenizeTransformation before and 2) if it had have a
-                // single component, it would have been equal to the service algorithm or alias
-                // and not set by ProvidersFilter.CipherTransformation to reach this point.
-                assert transformParts.length == 3 : "Unexpected transformation.";
-                List<String> allAlgos = new ArrayList<>(getAliases().size() + 1);
-                allAlgos.add(algorithm);
-                allAlgos.addAll(getAliases());
-                List<String> tAliases = new ArrayList<>(allAlgos.size() - 1);
-                for (String algo : allAlgos) {
-                    // If a service algorithm or alias has multiple components, use the first one
-                    // for the transformation alias. The second and third one (if any) are assumed
-                    // to be the mode and padding respectively, and taken from the transformation.
-                    algo = AlgorithmDecomposer.tokenizeTransformation(algo)[0];
-                    String transformAlgo = algo + "/" + transformParts[1] +
-                            "/" + transformParts[2];
-                    if (!transformAlgo.equalsIgnoreCase(transformation)) {
-                        tAliases.add(transformAlgo);
+
+            if (isAllowed == null) {
+                String[] parts;
+
+                try {
+                    parts = AlgorithmDecomposer.tokenizeTransformation(transformation);
+                } catch (NoSuchAlgorithmException nsae) {
+                    // transformation was already validated by Cipher::tokenizeTransformation
+                    throw new AssertionError("transformation is expected to be valid", nsae);
+                }
+
+                // Single-component names would have matched the service algorithm or alias and
+                // would not reach this method.
+                assert parts.length == 3 : "Unexpected transformation.";
+
+                String mode = parts[1];
+                String padding = parts[2];
+
+                List<String> serviceNames = new ArrayList<>(getAliases().size() + 1);
+                serviceNames.add(algorithm);
+                serviceNames.addAll(getAliases());
+                List<String> candidateTransformations = new ArrayList<>(serviceNames.size() - 1);
+                for (String name : serviceNames) {
+                    // Service algorithm names and aliases may be composite (e.g. "AES/CBC").
+                    // Only the base algorithm component is used when constructing equivalent
+                    // transformations; mode and padding are always taken from the evaluated
+                    // transformation.
+                    try {
+                        name = AlgorithmDecomposer.tokenizeTransformation(name)[0];
+                    } catch (NoSuchAlgorithmException nsae) {
+                        // Expected to be valid since algorithm and aliases originate from a
+                        // successfully resolved Provider.Service and therefore represent
+                        // valid, parseable algorithm identifiers
+                        throw new AssertionError("algorithm/alias expected to be valid", nsae);
+                    }
+
+                    final String candidateTransformation = name + "/" + mode + "/" + padding;
+
+                    if (!candidateTransformation.equalsIgnoreCase(transformation)) {
+                        candidateTransformations.add(candidateTransformation);
                     }
                 }
-                isTransformAllowed = ProvidersFilter.computeSvcAllowed(
-                        provider.getName(), type, transformation, tAliases);
-                cipherTransformsAllowed.put(transformation, isTransformAllowed);
+
+                isAllowed = ProvidersFilter.computeSvcAllowed(
+                        provider.getName(), type, transformation, candidateTransformations);
+
+                cipherTransformsAllowed.put(transformation, isAllowed);
+
             }
-            return isTransformAllowed;
+            return isAllowed;
         }
 
         /*
