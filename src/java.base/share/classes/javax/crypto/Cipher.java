@@ -425,6 +425,28 @@ public class Cipher {
         return null;
     }
 
+    /**
+     * Attempts to locate a {@link Service} for a Cipher using the given
+     * {@code serviceSearchKey}.
+     *
+     * <p>
+     * {@code canonicalTransform} is the full requested transformation
+     * (e.g. {@code "AES/CBC/NoPadding"}), while {@code serviceSearchKey}
+     * is the current lookup key, which may be reduced (e.g. {@code "AES/CBC"}
+     * or {@code "AES"}).
+     *
+     * <p>
+     * Providers may only register base algorithms (e.g. {@code Cipher.AES})
+     * and handle mode/padding dynamically via {@code CipherSpi}, so multiple
+     * keys may be probed during lookup.
+     *
+     * <p>
+     * A {@link ProvidersFilter.CipherTransformation} context is used to ensure
+     * provider filtering is applied against the full transformation, even when the
+     * lookup falls back to a generic key.
+     *
+     * @return the matching and allowed service, or {@code null} if none found
+     */
     private static Service tryGetService(Provider p, String canonicalTransform,
             String serviceSearchKey) {
         ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
@@ -438,6 +460,24 @@ public class Cipher {
         }
     }
 
+    /**
+     * Instantiates the selected {@link Service} under the given transformation
+     * context.
+     *
+     * <p>
+     * {@code canonicalTransform} is the full requested transformation (e.g.
+     * {@code "AES/CBC/PKCS5Padding"}), while {@code serviceSearchKey} identifies
+     * the matched service and may be a reduced form (e.g. {@code "AES"}).
+     *
+     * <p>
+     * The instance is created via {@link Service#newInstance(Object)} and typically
+     * corresponds to a {@code CipherSpi}. Providers may expose generic services
+     * (e.g. {@code Cipher.AES}) and apply mode/padding dynamically.
+     *
+     * <p>
+     * A {@link ProvidersFilter.CipherTransformation} context is used to ensure
+     * provider filtering is applied against the full transformation.
+     */
     private static Object newInstance(Service s, String canonicalTransform,
             String serviceSearchKey) throws NoSuchAlgorithmException {
         ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
@@ -731,8 +771,7 @@ public class Cipher {
         boolean providerChecked = false;
         String paddingError = null;
         for (Transform tr : transforms) {
-            Service s = tryGetService(provider, canonicalTransform,
-                    tr.transform);
+            Service s = tryGetService(provider, canonicalTransform, tr.transform);
             if (s == null) {
                 continue;
             }
@@ -757,8 +796,7 @@ public class Cipher {
                 continue;
             }
             try {
-                CipherSpi spi = (CipherSpi) newInstance(s, canonicalTransform,
-                        tr.transform);
+                CipherSpi spi = (CipherSpi) newInstance(s, canonicalTransform, tr.transform);
                 tr.setModePadding(spi);
                 Cipher cipher = new Cipher(spi, transformation);
                 cipher.provider = s.getProvider();
@@ -852,8 +890,7 @@ public class Cipher {
                 }
                 try {
                     if (thisSpi == null) {
-                        Object obj = newInstance(s, canonicalTransform,
-                                tr.transform);
+                        Object obj = newInstance(s, canonicalTransform, tr.transform);
                         if (obj instanceof CipherSpi == false) {
                             continue;
                         }
