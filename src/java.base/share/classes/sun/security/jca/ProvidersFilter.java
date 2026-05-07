@@ -40,6 +40,30 @@ import jdk.internal.access.SharedSecrets;
 import sun.security.util.Debug;
 import sun.security.util.SecurityProperties;
 
+/**
+ * Provides infrastructure to evaluate whether security services offered by
+ * providers are allowed for use at runtime.
+ *
+ * <p>
+ * Filtering is applied during service lookup and use. A service that is not
+ * allowed is treated as if it were not provided.
+ *
+ * <p>
+ * For certain service types, such as Cipher, filtering may depend on additional
+ * contextual information beyond the service type and algorithm. This context is
+ * established and scoped using auxiliary constructs such as
+ * {@link CipherTransformation}.
+ *
+ * <p>
+ * This class is an internal component of the JCA provider selection mechanism
+ * and is used by service lookup and instantiation paths to enforce filtering
+ * decisions consistently.
+ *
+ * @author Martin Balao
+ * @author Francisco Ferrari Bihurriet
+ * @author Andreas Chmielewski
+ * @since TODO
+ */
 public final class ProvidersFilter {
 
     private static final String FILTER_PROP = "jdk.security.providers.filter";
@@ -744,24 +768,41 @@ public final class ProvidersFilter {
     public record CipherContext(String transformation, String serviceSearchKey) {
     }
 
-    /*
-     * CipherTransformation is used from the Cipher::tryGetService,
-     * Cipher::newInstance and ProviderList.CipherServiceIterator::tryGetService
-     * methods for a thread to indicate that a service will be looked up for a
-     * Cipher transformation. In these cases, the service evaluation against
-     * the Providers Filter is based on the transformation and not the service
-     * algorithm or aliases. Thus, a Filter value such as
-     * "*.Cipher.AES/ECB/PKCS5Padding; !*" would allow
-     * Cipher.getInstance("AES/ECB/PKCS5Padding") but block
-     * Cipher.getInstance("AES") even when the supporting service is the same.
+    /**
+     * Thread-local context used to make ProvidersFilter evaluation
+     * transformation-aware during {@code Cipher} service lookup and instantiation.
+     *
+     * <p>
+     * When active, filtering decisions are based on the canonical transformation
+     * (e.g. {@code "AES/CBC/PKCS5Padding"}) rather than the current lookup key
+     * (which may be a reduced form such as {@code "AES"} or an alias).
+     *
+     * <p>
+     * The context is established by Cipher-related lookup/instantiation paths
+     * (e.g. {@code Cipher.tryGetService}, {@code Cipher.newInstance},
+     * and {@code CipherServiceIterator.tryGetService}) and is scoped to the
+     * current thread.
+     *
+     * <p>
+     * If the canonical transformation matches the current lookup key, the context
+     * is cleared and filtering falls back to regular service-based evaluation.
+     *
+     * <p>
+     * This allows fine-grained filter rules (e.g.
+     * {@code "*.Cipher.AES/CBC/PKCS5Padding; !*"}) to distinguish between
+     * different transformations even when backed by the same underlying service.
      */
     public static final class CipherTransformation implements Closeable {
-        private static final ThreadLocal<CipherContext> cipherTransformContext =
-                new ThreadLocal<>();
+        private static final ThreadLocal<CipherContext> cipherTransformContext = new ThreadLocal<>();
         private CipherContext prevContext;
 
-        public CipherTransformation(String transformation,
-                String serviceSearchKey) {
+        /**
+         * Create a new Cipher transformation context.
+         *
+         * @param transformation   the canonical transformation
+         * @param serviceSearchKey the current lookup key
+         */
+        public CipherTransformation(String transformation, String serviceSearchKey) {
             if (filter == null) {
                 return;
             }
@@ -778,13 +819,16 @@ public final class ProvidersFilter {
             }
         }
 
-        /*
-         * This method is called from Provider.Service::isAllowed for a thread
-         * to get the CipherContext related to a service lookup. Returns
-         * null if 1) there is not an ongoing service lookup based on a Cipher
-         * transformation or 2) the transformation matches the service
-         * algorithm or any of its aliases. A regular service evaluation (not
-         * based on the transformation) should be done if null is returned.
+        /**
+         * Return the current thread's transformation context, or {@code null} if:
+         * <ul>
+         * <li>no transformation-based evaluation is in progress, or</li>
+         * <li>the transformation matches the current lookup key</li>
+         * </ul>
+         *
+         * <p>
+         * A {@code null} result indicates that regular service-based filtering
+         * should be applied.
          */
         public static CipherContext getContext() {
             if (filter == null) {
