@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1163,13 +1163,17 @@ public abstract class Provider extends Properties {
      * the service added via {@link #putService putService()} is returned.
      *
      * @implNote
-     *           The JDK Reference Implementation additionally uses the
-     *           {@code jdk.security.providers.filter}
-     *           {@link System#getProperty(String) System} and
-     *           {@link Security#getProperty(String) Security} properties to
-     *           determine which {@linkplain java.security.Provider.Service
-     *           services} are enabled. A service that is not enabled by the filter
-     *           will not make its described implementation available.
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its described
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @param type the type of {@link Service service} requested
      * (for example, {@code MessageDigest})
@@ -1229,14 +1233,17 @@ public abstract class Provider extends Properties {
      * this {@code Provider}.
      *
      * @implNote
-     *           The JDK Reference Implementation additionally uses the
-     *           {@code jdk.security.providers.filter}
-     *           {@link System#getProperty(String) System}
-     *           and {@link Security#getProperty(String) Security} properties to
-     *           determine which
-     *           {@linkplain java.security.Provider.Service services} are enabled.
-     *           A service that is not enabled by the filter will not be included in
-     *           the Set.
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not be included in the
+     * Set.
+     * </li>
+     * </ul>
      *
      * @return an unmodifiable Set of all services supported by
      * this {@code Provider}
@@ -1325,13 +1332,16 @@ public abstract class Provider extends Properties {
      * Java Cryptography Architecture (JCA) Reference Guide}.
      *
      * @implNote
-     *           The JDK Reference Implementation additionally uses the
-     *           {@code jdk.security.providers.filter}
-     *           {@link System#getProperty(String) System} and
-     *           {@link Security#getProperty(String) Security} properties to
-     *           determine which {@linkplain java.security.Provider.Service
-     *           services} are enabled. A service that is not enabled by the filter
-     *           will not be added.
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not be added.
+     * </li>
+     * </ul>
      *
      * @param s the Service to add
      *
