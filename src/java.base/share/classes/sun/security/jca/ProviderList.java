@@ -400,6 +400,12 @@ public final class ProviderList {
         return new ServiceIterator(ids);
     }
 
+    /**
+     * Return an iterator over Cipher services matching the given service
+     * identifiers.
+     *
+     * The elements of this iterator are determined lazily on demand.
+     */
     public Iterator<Service> getCipherServices(List<ServiceId> ids) {
         return new CipherServiceIterator(ids);
     }
@@ -518,6 +524,11 @@ public final class ProviderList {
             }
         }
 
+        /**
+         * Attempts to retrieve a service of the given type and algorithm from the
+         * specified provider, returning {@code null} if no matching service is found or
+         * if the service is not allowed.
+         */
         Service tryGetService(Provider p, String type, String algorithm) {
             Service s = p.getService(type, algorithm);
             if (s == null || !ProvidersFilter.isServiceAllowed(s)) {
@@ -549,6 +560,15 @@ public final class ProviderList {
         }
     }
 
+    /**
+     * Iterator over {@code Cipher} services with transformation-aware provider
+     * filtering.
+     *
+     * <p>
+     * Establishes a {@link ProvidersFilter.CipherTransformation} context for each
+     * lookup so that filtering is evaluated against the canonical transformation
+     * rather than the current lookup key.
+     */
     private final class CipherServiceIterator extends ServiceIterator {
         private final String canonicalTransform;
 
