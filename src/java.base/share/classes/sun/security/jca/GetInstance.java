@@ -123,6 +123,12 @@ public class GetInstance {
         return list.getServices(ids);
     }
 
+    /**
+     * Return an iterator over Cipher services matching the given service
+     * identifiers.
+     *
+     * The elements of this iterator are determined lazily on demand.
+     */
     public static Iterator<Service> getCipherServices(List<ServiceId> ids) {
         ProviderList list = Providers.getProviderList();
         return list.getCipherServices(ids);
