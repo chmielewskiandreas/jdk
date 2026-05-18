@@ -560,6 +560,12 @@ public final class KEM {
      * The JDK Reference Implementation additionally uses the following
      * security properties:
      * <ul>
+     * <li>the {@code jdk.security.provider.preferred}
+     * {@link Security#getProperty(String) Security} property determines
+     * the preferred provider order for the specified algorithm.
+     * This may be different from the order of providers returned by
+     * {@link Security#getProviders() Security.getProviders()}.
+     * </li>
      * <li>the {@code jdk.security.providers.filter}
      * {@link System#getProperty(String) System} and
      * {@link Security#getProperty(String) Security} properties to determine
