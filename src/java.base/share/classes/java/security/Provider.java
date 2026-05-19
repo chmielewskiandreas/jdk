@@ -25,7 +25,6 @@
 
 package java.security;
 
-import javax.crypto.Cipher;
 import javax.crypto.KDFParameters;
 import javax.security.auth.login.Configuration;
 import java.io.*;
@@ -1046,12 +1045,11 @@ public abstract class Provider extends Properties {
                     if (prevAliasService != null) {
                         prevAliasService.removeAlias(aliasAlg);
                     }
-                    boolean isNewService = stdService == null;
+                    boolean isNewService = (stdService == null);
                     if (isNewService) {
                         stdService = new Service(this, type, value);
                     }
                     stdService.addAlias(aliasAlg);
-                    // The new alias can modify the Providers filter decision.
                     stdService.computeServiceAllowed();
                     if (stdService.cipherTransformsAllowedCache != null) {
                         stdService.cipherTransformsAllowedCache.clear();
@@ -1065,7 +1063,6 @@ public abstract class Provider extends Properties {
                 case REMOVE:
                     if (stdService != null) {
                         stdService.removeAlias(aliasAlg);
-                        // The removed alias can modify the Providers filter decision.
                         stdService.computeServiceAllowed();
                         if (stdService.cipherTransformsAllowedCache != null) {
                             stdService.cipherTransformsAllowedCache.clear();
@@ -1096,9 +1093,6 @@ public abstract class Provider extends Properties {
                                 "className can't be null");
                         if (stdService == null) {
                             stdService = new Service(this, type, stdAlg);
-                            // Note: if the service exists already, recomputing
-                            // Service::isAllowedService is not necessary because a change in the
-                            // class name does not affect the previous filter decision.
                             stdService.computeServiceAllowed();
                             legacyMap.put(stdKey, stdService);
                         }
@@ -1256,11 +1250,15 @@ public abstract class Provider extends Properties {
     }
 
     /*
-     * This method returns an unmodifiable set of services that are supported by
-     * this provider but not allowed by the Providers filter (see
-     * sun.security.jca.ProvidersFilter). These services must not be used for
-     * anything other than informational purposes (see sun.launcher.SecuritySettings
-     * and the -XshowSettings:security:providers JVM argument).
+     * Return an unmodifiable set of services that are supported by this provider
+     * but not allowed by the Providers Filter (see
+     * sun.security.jca.ProvidersFilter).
+     *
+     * Services in this set are excluded by policy and must not be used for
+     * instantiation or functional purposes. They are exposed only for
+     * informational and diagnostic use (for example, by
+     * sun.launcher.SecuritySettings and the -XshowSettings:security:providers
+     * option).
      */
     private Set<Service> getNotAllowedServices() {
         checkInitialized();
@@ -1268,32 +1266,54 @@ public abstract class Provider extends Properties {
         return notAllowedSet;
     }
 
-    // TODO: add documentation
-    private void computeServiceSets() {
-        if (allowedSet == null || notAllowedSet == null ||
-                legacyChanged || servicesChanged) {
-            Set<Service> newAllowedSet = new LinkedHashSet<>();
-            Set<Service> newNotAllowedSet = new LinkedHashSet<>();
-            classifyServices(serviceMap, newAllowedSet, newNotAllowedSet);
-            classifyServices(legacyMap, newAllowedSet, newNotAllowedSet);
-            allowedSet = Collections.unmodifiableSet(newAllowedSet);
-            notAllowedSet = Collections.unmodifiableSet(newNotAllowedSet);
-            servicesChanged = false;
-            legacyChanged = false;
-        }
+    private boolean needsRecomputation() {
+        return allowedSet == null
+                || notAllowedSet == null
+                || servicesChanged
+                || legacyChanged;
     }
 
-    // TODO: add documentation
-    private static void classifyServices(Map<ServiceKey, Service> map,
-            Set<Service> allowedServices, Set<Service> notAllowedServices) {
-        if (!map.isEmpty()) {
-            for (Service s : map.values()) {
-                if (s.isValid()) {
-                    (s.isServiceAllowed() ? allowedServices : notAllowedServices).add(s);
-                }
+    /*
+     * Compute and cache the sets of services that are allowed and not allowed by
+     * the Providers Filter.
+     */
+    private void computeServiceSets() {
+        if (!needsRecomputation()) {
+            return;
+        }
+
+        Set<Service> newAllowedSet = new LinkedHashSet<>();
+        Set<Service> newNotAllowedSet = new LinkedHashSet<>();
+
+        classifyServices(serviceMap, newAllowedSet, newNotAllowedSet);
+        classifyServices(legacyMap, newAllowedSet, newNotAllowedSet);
+
+        allowedSet = Collections.unmodifiableSet(newAllowedSet);
+        notAllowedSet = Collections.unmodifiableSet(newNotAllowedSet);
+
+        servicesChanged = false;
+        legacyChanged = false;
+    }
+
+    /*
+     * Classify valid services from the given map into allowed and not-allowed sets
+     * according to the Providers Filter.
+     */
+    private static void classifyServices(Map<ServiceKey, Service> map, Set<Service> allowedServices,
+            Set<Service> notAllowedServices) {
+        for (Service s : map.values()) {
+            if (!s.isValid()) {
+                continue;
+            }
+
+            if (s.isServiceAllowed()) {
+                allowedServices.add(s);
+            } else {
+                notAllowedServices.add(s);
             }
         }
     }
+
 
     /**
      * Add a service. If a service of the same type with the same algorithm
@@ -1610,14 +1630,17 @@ public abstract class Provider extends Properties {
         private Map<UString,String> attributes;
         private final EngineDescription engineDescription;
 
-        // Cache with the Providers filter decision for this service. Value is null when
-        // not decided.
+        // Cache of the Providers Filter decision for this service. A value of null
+        // indicates that the allow/deny decision has not yet been evaluated.
         private Boolean isAllowedService;
 
-        // Cache with transformation - filter decision entries. Transformations in this
-        // cache are based on this service algorithm or aliases, but are not necessarily
-        // supported (further evaluation is needed). For Cipher service types only
-        // (lazily initialized), null otherwise.
+        // Cache mapping full Cipher transformations to the result of the Providers
+        // Filter evaluation. The transformations cached here are derived from this
+        // service algorithm and its aliases and represent potential Cipher semantics.
+        // A cached "allowed" result means the transformation is permitted by policy,
+        // but does not imply that the service actually implements or supports it;
+        // implementation and capability checks are performed later. Used for Cipher
+        // services only (lazily initialized), null otherwise.
         private Map<String, Boolean> cipherTransformsAllowedCache;
 
         // Reference to the cached implementation Class object.
@@ -1757,7 +1780,7 @@ public abstract class Provider extends Properties {
                 // Cipher.Transform::supports).
                 if ((cipherTransformsAllowedCache != null || type.equals("Cipher"))
                         && isTransformationForService(cipherContext.serviceSearchKey())) {
-                    return isTransformationAllowed(
+                    return isCipherTransformationAllowedForService(
                             cipherContext.transformation());
                 } else {
                     // Unlikely. May happen if a provider overrides Provider::getService or
@@ -1780,8 +1803,7 @@ public abstract class Provider extends Properties {
         }
 
         /*
-         * Returns whether a key matches any of the algorithm or aliases (case
-         * insensitive).
+         * Return whether a key matches any of the algorithm or aliases.
          */
         private boolean isTransformationForService(String serviceSearchKey) {
             if (serviceSearchKey.equalsIgnoreCase(algorithm)) {
@@ -1804,7 +1826,7 @@ public abstract class Provider extends Properties {
          * partial algorithm names or aliases, equivalent transformation aliases are
          * derived from the service algorithm and its aliases and evaluated together.
          */
-        private boolean isTransformationAllowed(String transformation) {
+        private boolean isCipherTransformationAllowedForService(String transformation) {
             Boolean isAllowed;
             if (cipherTransformsAllowedCache == null) {
                 cipherTransformsAllowedCache = new ConcurrentHashMap<>();
@@ -1819,7 +1841,8 @@ public abstract class Provider extends Properties {
                 try {
                     parts = AlgorithmDecomposer.tokenizeTransformation(transformation);
                 } catch (NoSuchAlgorithmException nsae) {
-                    // transformation was already validated by Cipher::tokenizeTransformation
+                    // Should not reach here:
+                    // Transformation was already validated by Cipher::tokenizeTransformation
                     throw new AssertionError("transformation is expected to be valid", nsae);
                 }
 
@@ -1842,6 +1865,7 @@ public abstract class Provider extends Properties {
                     try {
                         name = AlgorithmDecomposer.tokenizeTransformation(name)[0];
                     } catch (NoSuchAlgorithmException nsae) {
+                        // Should not reach here:
                         // Expected to be valid since algorithm and aliases originate from a
                         // successfully resolved Provider.Service and therefore represent
                         // valid, parseable algorithm identifiers
@@ -1865,9 +1889,10 @@ public abstract class Provider extends Properties {
         }
 
         /*
-         * Pass the service through the Providers filter and save the result. Called
-         * before adding a Service to the map, when adding or removing a service alias
-         * with the legacy API, and from Service::isAllowed to handle uncommon cases.
+         * This method is invoked before inserting a Service into the internal map, when
+         * adding or removing aliases via the legacy API (as aliases can affect the
+         * filter decision), and from Service::isAllowedService to handle uncommon
+         * evaluation paths.
          */
         private void computeServiceAllowed() {
             isAllowedService = ProvidersFilter.computeServiceAllowed(
