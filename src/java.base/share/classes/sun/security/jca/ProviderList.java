@@ -368,7 +368,7 @@ public final class ProviderList {
                     continue;
                 }
                 Service s = p.getService(type, name);
-                if (s != null && ProvidersFilter.isAllowed(s)) {
+                if (s != null && ProvidersFilter.isServiceAllowed(s)) {
                     return s;
                 }
             }
@@ -376,7 +376,7 @@ public final class ProviderList {
         for (i = 0; i < configs.length; i++) {
             Provider p = getProvider(i);
             Service s = p.getService(type, name);
-            if (s != null && ProvidersFilter.isAllowed(s)) {
+            if (s != null && ProvidersFilter.isServiceAllowed(s)) {
                 return s;
             }
         }
@@ -520,7 +520,7 @@ public final class ProviderList {
 
         Service tryGetService(Provider p, String type, String algorithm) {
             Service s = p.getService(type, algorithm);
-            if (s == null || !ProvidersFilter.isAllowed(s)) {
+            if (s == null || !ProvidersFilter.isServiceAllowed(s)) {
                 return null;
             }
             return s;

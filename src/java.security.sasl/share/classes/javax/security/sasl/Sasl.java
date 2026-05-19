@@ -421,7 +421,7 @@ public class Sasl {
             if (provs != null) {
                 for (Provider p : provs) {
                     service = p.getService(type, mechName);
-                    if (service == null || !ProvidersFilter.isAllowed(service)) {
+                    if (service == null || !ProvidersFilter.isServiceAllowed(service)) {
                         // no such service exists
                         continue;
                     }
@@ -567,7 +567,7 @@ public class Sasl {
         if (provs != null) {
             for (Provider p : provs) {
                 service = p.getService(type, mechanism);
-                if (service == null || !ProvidersFilter.isAllowed(service)) {
+                if (service == null || !ProvidersFilter.isServiceAllowed(service)) {
                     throw new SaslException("Provider does not support " +
                         mechanism + " " + type);
                 }
@@ -642,7 +642,7 @@ public class Sasl {
             Iterator<Service> iter = p.getServices().iterator();
             while (iter.hasNext()) {
                 Service s = iter.next();
-                if (ProvidersFilter.isAllowed(s) &&
+                if (ProvidersFilter.isServiceAllowed(s) &&
                         s.getType().equals(serviceName)) {
                     try {
                         fac = loadFactory(s);

@@ -1883,7 +1883,7 @@ public class KeyStore {
             // Detect the keystore type
             for (Provider p : Security.getProviders()) {
                 for (Provider.Service s : p.getServices()) {
-                    if (ProvidersFilter.isAllowed(s) &&
+                    if (ProvidersFilter.isServiceAllowed(s) &&
                             s.getType().equals("KeyStore")) {
                         try {
                             KeyStoreSpi impl = (KeyStoreSpi) s.newInstance(null);

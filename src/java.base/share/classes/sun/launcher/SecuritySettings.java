@@ -199,8 +199,7 @@ public final class SecuritySettings {
                 printSecurityProviderServices(p.getServices());
                 ostream.println(TWOINDENT + "Provider services NOT allowed: (type : algorithm)");
                 printSecurityProviderServices(
-                        SharedSecrets.getJavaSecurityProviderAccess()
-                                .getServicesNotAllowed(p));
+                        SharedSecrets.getJavaSecurityProviderAccess().getNotAllowedServices(p));
             }
         }
         if (verbose) {

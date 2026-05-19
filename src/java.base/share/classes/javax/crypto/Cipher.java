@@ -426,12 +426,12 @@ public class Cipher {
     }
 
     private static Service tryGetService(Provider p, String canonicalTransform,
-            String svcSearchKey) {
+            String serviceSearchKey) {
         ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
-                canonicalTransform, svcSearchKey);
+                canonicalTransform, serviceSearchKey);
         try (ct) {
-            Service s = p.getService("Cipher", svcSearchKey);
-            if (s == null || !ProvidersFilter.isAllowed(s)) {
+            Service s = p.getService("Cipher", serviceSearchKey);
+            if (s == null || !ProvidersFilter.isServiceAllowed(s)) {
                 return null;
             }
             return s;
@@ -439,9 +439,9 @@ public class Cipher {
     }
 
     private static Object newInstance(Service s, String canonicalTransform,
-            String svcSearchKey) throws NoSuchAlgorithmException {
+            String serviceSearchKey) throws NoSuchAlgorithmException {
         ProvidersFilter.CipherTransformation ct = new ProvidersFilter.CipherTransformation(
-                canonicalTransform, svcSearchKey);
+                canonicalTransform, serviceSearchKey);
         try (ct) {
             return s.newInstance(null);
         }

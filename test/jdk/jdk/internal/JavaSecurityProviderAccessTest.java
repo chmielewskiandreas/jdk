@@ -58,7 +58,7 @@ public class JavaSecurityProviderAccessTest {
         }
 
         List<String> aliases = a.getAliases(svc);
-        Set<Provider.Service> notAllowed = a.getServicesNotAllowed(p);
-        boolean allowed = a.isAllowed(svc);
+        Set<Provider.Service> notAllowed = a.getNotAllowedServices(p);
+        boolean allowed = a.isServiceAllowed(svc);
     }
 }

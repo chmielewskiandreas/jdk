@@ -91,18 +91,16 @@ public final class ProvidersFilter {
         }
     }
 
-    private record FilterQuery(String provider, String svcType,
-            String svcAlgo) {
+    private record FilterQuery(String provider, String serviceType, String algorithm) {
         private FilterQuery {
-            assert provider != null && svcType != null && svcAlgo != null :
+            assert provider != null && serviceType != null && algorithm != null :
                     "Invalid FilterQuery.";
         }
 
         @Override
         public String toString() {
-            return "Service filter query (Provider: " + provider +
-                    ", Service type: " + svcType + ", Algorithm: " +
-                    svcAlgo + ")";
+            return "Service filter query (Provider: " + provider + ", Service type: " +
+                    serviceType + ", Algorithm: " + algorithm + ")";
         }
     }
 
@@ -111,12 +109,11 @@ public final class ProvidersFilter {
             FilterDecision apply(FilterQuery q);
         }
 
-        private record PatternRuleComponent(Type type, String value,
-                Pattern regexp) {
+        private record PatternRuleComponent(Type type, String value, Pattern regexp) {
             enum Type {
                 PROVIDER("Provider"),
-                SVC_TYPE("Service type"),
-                SVC_ALGO("Algorithm");
+                SERVICE_TYPE("Service type"),
+                ALGORITHM("Algorithm");
 
                 private final String type;
 
@@ -132,11 +129,11 @@ public final class ProvidersFilter {
 
             private static final Pattern ALL_PATTERN = Pattern.compile(".*");
 
-            static final PatternRuleComponent ANY_SVC_TYPE =
-                    new PatternRuleComponent(Type.SVC_TYPE, "*", ALL_PATTERN);
+            static final PatternRuleComponent ANY_SERVICE_TYPE = new PatternRuleComponent(Type.SERVICE_TYPE, "*",
+                    ALL_PATTERN);
 
-            static final PatternRuleComponent ANY_SVC_ALGO =
-                    new PatternRuleComponent(Type.SVC_ALGO, "*", ALL_PATTERN);
+            static final PatternRuleComponent ANY_ALGORITHM = new PatternRuleComponent(Type.ALGORITHM, "*",
+                    ALL_PATTERN);
 
             PatternRuleComponent {
                 assert value != null && !value.isEmpty() && regexp != null :
@@ -160,15 +157,15 @@ public final class ProvidersFilter {
         private static final class PatternRule implements Rule {
             private FilterDecision decision;
             private PatternRuleComponent provider;
-            private PatternRuleComponent svcType;
-            private PatternRuleComponent svcAlgo;
+            private PatternRuleComponent serviceType;
+            private PatternRuleComponent algorithm;
 
             @Override
             public FilterDecision apply(FilterQuery q) {
                 assert assertIsValid();
                 if (provider.regexp.matcher(q.provider).matches() &&
-                        svcType.regexp.matcher(q.svcType).matches() &&
-                        svcAlgo.regexp.matcher(q.svcAlgo).matches()) {
+                        serviceType.regexp.matcher(q.serviceType).matches() &&
+                        algorithm.regexp.matcher(q.algorithm).matches()) {
                     return decision;
                 }
                 return FilterDecision.UNDECIDED;
@@ -180,15 +177,15 @@ public final class ProvidersFilter {
                 assert decision.priority != FilterDecision.UNDEFINED_PRIORITY :
                         "Invalid decision priority.";
                 assert provider != null : "Invalid provider.";
-                assert svcType != null : "Invalid service type.";
-                assert svcAlgo != null : "Invalid algorithm.";
+                assert serviceType != null : "Invalid service type.";
+                assert algorithm != null : "Invalid algorithm.";
                 return true;
             }
 
             @Override
             public String toString() {
                 return (decision.result == FilterDecision.Result.DENY ? "!" :
-                        "") + provider + "." + svcType + "." + svcAlgo;
+                        "") + provider + "." + serviceType + "." + algorithm;
             }
 
             void debugDisplay() {
@@ -196,8 +193,8 @@ public final class ProvidersFilter {
                     return;
                 }
                 provider.debugDisplay();
-                svcType.debugDisplay();
-                svcAlgo.debugDisplay();
+                serviceType.debugDisplay();
+                algorithm.debugDisplay();
                 decision.debugDisplay();
             }
         }
@@ -394,12 +391,12 @@ public final class ProvidersFilter {
                 if (rule.provider == null) {
                     rule.provider = getComponent(
                             PatternRuleComponent.Type.PROVIDER);
-                } else if (rule.svcType == null) {
-                    rule.svcType = getComponent(
-                            PatternRuleComponent.Type.SVC_TYPE);
-                } else if (rule.svcAlgo == null) {
-                    rule.svcAlgo = getComponent(
-                            PatternRuleComponent.Type.SVC_ALGO);
+                } else if (rule.serviceType == null) {
+                    rule.serviceType = getComponent(
+                            PatternRuleComponent.Type.SERVICE_TYPE);
+                } else if (rule.algorithm == null) {
+                    rule.algorithm = getComponent(
+                            PatternRuleComponent.Type.ALGORITHM);
                 } else {
                     assert false : "Should not reach.";
                 }
@@ -412,11 +409,11 @@ public final class ProvidersFilter {
                     throw new ParserException("Invalid escaping.", this);
                 }
                 flushBuffers();
-                if (rule.svcType == null) {
-                    rule.svcType = PatternRuleComponent.ANY_SVC_TYPE;
+                if (rule.serviceType == null) {
+                    rule.serviceType = PatternRuleComponent.ANY_SERVICE_TYPE;
                 }
-                if (rule.svcAlgo == null) {
-                    rule.svcAlgo = PatternRuleComponent.ANY_SVC_ALGO;
+                if (rule.algorithm == null) {
+                    rule.algorithm = PatternRuleComponent.ANY_ALGORITHM;
                 }
                 if (debug != null) {
                     debug.println("--------------------");
@@ -512,7 +509,7 @@ public final class ProvidersFilter {
                         //
                         // "    Provider.ServiceType.Algorithm;"
                         //               ^^^^
-                        if (rule.svcType != null) {
+                        if (rule.serviceType != null) {
                             throw new ParserException("Too many levels. Dots " +
                                     "that are part of a provider name, " +
                                     "service type or algorithm must be " +
@@ -690,7 +687,7 @@ public final class ProvidersFilter {
      * This method has to be called every time that a Provider.Service instance
      * is obtained with Provider::getService or Provider::getServices.
      */
-    public static boolean isAllowed(Provider.Service svc) {
+    public static boolean isServiceAllowed(Provider.Service s) {
         if (filter == null) {
             return true;
         }
@@ -698,54 +695,54 @@ public final class ProvidersFilter {
         // call is expected to be fast: only a Provider.Service field read. It
         // might take longer on the first time for uncommon services (see
         // Provider.Service::isAllowed).
-        return jspa.isAllowed(svc);
+        return jspa.isServiceAllowed(s);
     }
 
     /*
-     * This method is called from Provider.Service::computeSvcAllowed and
+     * This method is called from Provider.Service::computeServiceAllowed and
      * Provider.Service::isTransformationAllowed.
      */
-    public static boolean computeSvcAllowed(String providerName,
-            String svcType, String algo, List<String> aliases) {
+    public static boolean computeServiceAllowed(String provider, String serviceType,
+            String algorithm, List<String> aliases) {
         if (filter == null) {
             return true;
         }
-        FilterDecision d = isAllowed(providerName, svcType, algo);
+        FilterDecision d = isAllowed(provider, serviceType, algorithm);
         if (debug != null && aliases.size() > 0) {
             debug.println("--------------------");
             debug.println("The queried service has aliases. Checking them " +
                     "for a final decision...");
         }
-        for (String algAlias : aliases) {
-            FilterDecision da = isAllowed(providerName, svcType, algAlias);
+        for (String algorithmAliases : aliases) {
+            FilterDecision da = isAllowed(provider, serviceType, algorithmAliases);
             if (da.priority < d.priority) {
                 d = da;
                 if (debug != null) {
-                    algo = algAlias;
+                    algorithm = algorithmAliases;
                 }
             }
         }
         if (debug != null && aliases.size() > 0) {
             debug.println("--------------------");
-            debug.println("Final decision based on " + algo + " algorithm" +
+            debug.println("Final decision based on " + algorithm + " algorithm" +
                     ": " + d);
         }
         return d.isAllow();
     }
 
-    private static FilterDecision isAllowed(String provider, String svcType,
-            String svcAlgo) {
-        return filter.apply(new FilterQuery(provider, svcType, svcAlgo));
+    private static FilterDecision isAllowed(String provider, String serviceType, String algorithm) {
+        return filter.apply(new FilterQuery(provider, serviceType, algorithm));
     }
 
     /*
      * CipherContext is an auxiliary class to bundle information required by
      * CipherTransformation. The field "transformation" is the ongoing Cipher
      * transformation for which a service is being looked up. The field
-     * "svcSearchKey" is the key (algorithm or alias) used to look up a
+     * "serviceSearchKey" is the key (algorithm or alias) used to look up a
      * service that might support the transformation.
      */
-    public record CipherContext(String transformation, String svcSearchKey) {}
+    public record CipherContext(String transformation, String serviceSearchKey) {
+    }
 
     /*
      * CipherTransformation is used from the Cipher::tryGetService,
@@ -764,15 +761,15 @@ public final class ProvidersFilter {
         private CipherContext prevContext;
 
         public CipherTransformation(String transformation,
-                String svcSearchKey) {
+                String serviceSearchKey) {
             if (filter == null) {
                 return;
             }
             prevContext = cipherTransformContext.get();
-            if (!transformation.equalsIgnoreCase(svcSearchKey)) {
+            if (!transformation.equalsIgnoreCase(serviceSearchKey)) {
                 cipherTransformContext.set(new CipherContext(
                         transformation.toUpperCase(Locale.ENGLISH),
-                        svcSearchKey));
+                        serviceSearchKey));
             } else {
                 // The transformation matches the service algorithm or alias.
                 // Set the context to null to indicate that a regular service

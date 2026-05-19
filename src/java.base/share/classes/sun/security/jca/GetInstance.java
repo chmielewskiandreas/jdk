@@ -83,7 +83,7 @@ public class GetInstance {
             throw new NoSuchProviderException("no such provider: " + provider);
         }
         Service s = p.getService(type, algorithm);
-        if (s == null || !ProvidersFilter.isAllowed(s)) {
+        if (s == null || !ProvidersFilter.isServiceAllowed(s)) {
             throw new NoSuchAlgorithmException("no such algorithm: "
                 + algorithm + " for provider " + provider);
         }
@@ -96,7 +96,7 @@ public class GetInstance {
             throw new IllegalArgumentException("missing provider");
         }
         Service s = provider.getService(type, algorithm);
-        if (s == null || !ProvidersFilter.isAllowed(s)) {
+        if (s == null || !ProvidersFilter.isServiceAllowed(s)) {
             throw new NoSuchAlgorithmException("no such algorithm: "
                 + algorithm + " for provider " + provider.getName());
         }

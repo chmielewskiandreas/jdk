@@ -178,7 +178,7 @@ public abstract class TransformService implements Transform {
         Provider[] provs = Security.getProviders();
         for (Provider p : provs) {
             Service s = p.getService("TransformService", algorithm);
-            if (s != null && ProvidersFilter.isAllowed(s)) {
+            if (s != null && ProvidersFilter.isServiceAllowed(s)) {
                 String value = s.getAttribute("MechanismType");
                 if ((value == null && dom) ||
                     (value != null && value.equals(mechanismType))) {
@@ -240,7 +240,7 @@ public abstract class TransformService implements Transform {
             dom = true;
         }
         Service s = provider.getService("TransformService", algorithm);
-        if (s != null && ProvidersFilter.isAllowed(s)) {
+        if (s != null && ProvidersFilter.isServiceAllowed(s)) {
             String value = s.getAttribute("MechanismType");
             if ((value == null && dom) ||
                 (value != null && value.equals(mechanismType))) {
@@ -311,7 +311,7 @@ public abstract class TransformService implements Transform {
                                               provider);
         }
         Service s = p.getService("TransformService", algorithm);
-        if (s != null && ProvidersFilter.isAllowed(s)) {
+        if (s != null && ProvidersFilter.isServiceAllowed(s)) {
             String value = s.getAttribute("MechanismType");
             if ((value == null && dom) ||
                 (value != null && value.equals(mechanismType))) {

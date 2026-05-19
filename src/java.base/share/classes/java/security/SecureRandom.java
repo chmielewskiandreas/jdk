@@ -282,7 +282,7 @@ public class SecureRandom extends java.util.Random {
                 prngAlgorithm = SunEntries.DEF_SECURE_RANDOM_ALGO;
                 prngService = p.getService("SecureRandom", prngAlgorithm);
                 if (prngService != null) {
-                    if (ProvidersFilter.isAllowed(prngService)) {
+                    if (ProvidersFilter.isServiceAllowed(prngService)) {
                         break;
                     } else {
                         prngService = null;

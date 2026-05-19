@@ -204,7 +204,7 @@ public abstract class XMLSignatureFactory {
         Provider[] provs = Security.getProviders();
         for (Provider p : provs) {
             Service s = p.getService("XMLSignatureFactory", mechanismType);
-            if (s != null && ProvidersFilter.isAllowed(s)) {
+            if (s != null && ProvidersFilter.isServiceAllowed(s)) {
                 Object obj = null;
                 try {
                     obj = s.newInstance(null);
@@ -255,7 +255,7 @@ public abstract class XMLSignatureFactory {
         }
 
         Service s = provider.getService("XMLSignatureFactory", mechanismType);
-        if (s != null && ProvidersFilter.isAllowed(s)) {
+        if (s != null && ProvidersFilter.isServiceAllowed(s)) {
             Object obj = null;
             try {
                 obj = s.newInstance(null);
@@ -318,7 +318,7 @@ public abstract class XMLSignatureFactory {
                                               provider);
         }
         Service s = p.getService("XMLSignatureFactory", mechanismType);
-        if (s != null && ProvidersFilter.isAllowed(s)) {
+        if (s != null && ProvidersFilter.isServiceAllowed(s)) {
             Object obj = null;
             try {
                 obj = s.newInstance(null);

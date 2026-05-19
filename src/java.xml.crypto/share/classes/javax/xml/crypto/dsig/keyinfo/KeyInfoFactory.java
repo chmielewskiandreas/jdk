@@ -159,7 +159,7 @@ public abstract class KeyInfoFactory {
         Provider[] provs = Security.getProviders();
         for (Provider p : provs) {
             Service s = p.getService("KeyInfoFactory", mechanismType);
-            if (s != null && ProvidersFilter.isAllowed(s)) {
+            if (s != null && ProvidersFilter.isServiceAllowed(s)) {
                 Object obj = null;
                 try {
                     obj = s.newInstance(null);
@@ -210,7 +210,7 @@ public abstract class KeyInfoFactory {
         }
 
         Service s = provider.getService("KeyInfoFactory", mechanismType);
-        if (s != null && ProvidersFilter.isAllowed(s)) {
+        if (s != null && ProvidersFilter.isServiceAllowed(s)) {
             Object obj = null;
             try {
                 obj = s.newInstance(null);
@@ -271,7 +271,7 @@ public abstract class KeyInfoFactory {
                                               provider);
         }
         Service s = p.getService("KeyInfoFactory", mechanismType);
-        if (s != null && ProvidersFilter.isAllowed(s)) {
+        if (s != null && ProvidersFilter.isServiceAllowed(s)) {
             Object obj = null;
             try {
                 obj = s.newInstance(null);

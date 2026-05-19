@@ -399,21 +399,21 @@ public final class Security {
      * Returns a service allowed by the Providers filter given a service type,
      * algorithm and provider. Search is case-insensitive.
      */
-    private static Provider.Service findService(String type, String algo,
+    private static Provider.Service findService(String serviceType, String algorithm,
             Provider provider) {
-        // Try the fast path (when "type" has the exact case).
-        Provider.Service foundSvc = provider.getService(type, algo);
-        if (foundSvc == null) {
-            // Try the slow path (when "type" does not have the exact case).
-            for (Provider.Service svc : provider.getServices()) {
-                if (svc.getType().equalsIgnoreCase(type)) {
-                    foundSvc = provider.getService(svc.getType(), algo);
+        // Try the fast path (when "serviceType" has the exact case).
+        Provider.Service foundService = provider.getService(serviceType, algorithm);
+        if (foundService == null) {
+            // Try the slow path (when "serviceType" does not have the exact case).
+            for (Provider.Service s : provider.getServices()) {
+                if (s.getType().equalsIgnoreCase(serviceType)) {
+                    foundService = provider.getService(s.getType(), algorithm);
                     break;
                 }
             }
         }
-        if (foundSvc != null && ProvidersFilter.isAllowed(foundSvc)) {
-            return foundSvc;
+        if (foundService != null && ProvidersFilter.isServiceAllowed(foundService)) {
+            return foundService;
         }
         return null;
     }
