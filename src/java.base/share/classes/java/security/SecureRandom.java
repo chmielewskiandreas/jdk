@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -376,12 +376,23 @@ public class SecureRandom extends java.util.Random {
      * the {@link Security#getProviders() Security.getProviders()} method.
      *
      * @implNote
-     * The JDK Reference Implementation additionally uses the
-     * {@code jdk.security.provider.preferred}
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.provider.preferred}
      * {@link Security#getProperty(String) Security} property to determine
      * the preferred provider order for the specified algorithm. This
      * may be different from the order of providers returned by
      * {@link Security#getProviders() Security.getProviders()}.
+     * </li>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its algorithm
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @param algorithm the name of the RNG algorithm.
      * See the {@code SecureRandom} section in the <a href=
@@ -422,6 +433,19 @@ public class SecureRandom extends java.util.Random {
      *
      * <p> Note that the list of registered providers may be retrieved via
      * the {@link Security#getProviders() Security.getProviders()} method.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its algorithm
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @param algorithm the name of the RNG algorithm.
      * See the {@code SecureRandom} section in the <a href=
@@ -467,6 +491,19 @@ public class SecureRandom extends java.util.Random {
      * {@code SecureRandomSpi} implementation from the specified provider
      * is returned.  Note that the specified provider does not
      * have to be registered in the provider list.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its algorithm
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @param algorithm the name of the RNG algorithm.
      * See the {@code SecureRandom} section in the <a href=
@@ -517,11 +554,23 @@ public class SecureRandom extends java.util.Random {
      * the {@link Security#getProviders() Security.getProviders()} method.
      *
      * @implNote
-     * The JDK Reference Implementation additionally uses the
-     * {@code jdk.security.provider.preferred} property to determine
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.provider.preferred}
+     * {@link Security#getProperty(String) Security} property to determine
      * the preferred provider order for the specified algorithm. This
      * may be different from the order of providers returned by
      * {@link Security#getProviders() Security.getProviders()}.
+     * </li>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its algorithm
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @param algorithm the name of the RNG algorithm.
      * See the {@code SecureRandom} section in the <a href=
@@ -573,6 +622,19 @@ public class SecureRandom extends java.util.Random {
      *
      * <p> Note that the list of registered providers may be retrieved via
      * the {@link Security#getProviders() Security.getProviders()} method.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its algorithm
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @param algorithm the name of the RNG algorithm.
      * See the {@code SecureRandom} section in the <a href=
@@ -626,6 +688,19 @@ public class SecureRandom extends java.util.Random {
      * {@code SecureRandomSpi} implementation from the specified
      * provider is returned.  Note that the specified provider
      * does not have to be registered in the provider list.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its algorithm
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @param algorithm the name of the RNG algorithm.
      * See the {@code SecureRandom} section in the <a href=
@@ -963,6 +1038,19 @@ public class SecureRandom extends java.util.Random {
      * <p>
      * Every implementation of the Java platform is required to
      * support at least one strong {@code SecureRandom} implementation.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not make its algorithm
+     * implementation available.
+     * </li>
+     * </ul>
      *
      * @return a strong {@code SecureRandom} implementation as indicated
      * by the {@code securerandom.strongAlgorithms} Security property

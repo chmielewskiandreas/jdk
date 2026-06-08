@@ -611,6 +611,19 @@ public final class Security {
      * for information about standard cryptographic service names, standard
      * algorithm names and standard attribute names.
      *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not match the selection
+     * criteria for its provider.
+     * </li>
+     * </ul>
+     *
      * @param filter the criterion for selecting
      * providers. The filter is case-insensitive.
      *
@@ -688,6 +701,19 @@ public final class Security {
      * Java Security Standard Algorithm Names Specification</a>
      * for information about standard cryptographic service names, standard
      * algorithm names and standard attribute names.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * A service that is not enabled by the filter will not match the selection
+     * criteria for its provider.
+     * </li>
+     * </ul>
      *
      * @param filter the criteria for selecting
      * providers. The filter is case-insensitive.
@@ -1003,6 +1029,19 @@ public final class Security {
      * {@extLink security_guide_jca
      * Java Cryptography Architecture (JCA) Reference Guide}.
      * Note: the returned set is immutable.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     * The algorithm of a service that is not enabled by the provider filter
+     * will be returned in the returned set but may not be available for use.
+     * </li>
+     * </ul>
      *
      * @param serviceName the name of the Java cryptographic
      * service (e.g., {@code Signature}, {@code MessageDigest}, {@code Cipher},
