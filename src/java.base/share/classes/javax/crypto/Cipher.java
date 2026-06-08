@@ -762,9 +762,12 @@ public class Cipher {
         String paddingError = null;
         for (Transform tr : transforms) {
             Service s = provider.getService("Cipher", tr.transform);
-            if (s == null) {
+            if (s == null ||
+                    !ProvidersFilter.isServiceAllowed(
+                            provider.getName(), s.getType(), transformation)) {
                 continue;
             }
+
             if (providerChecked == false) {
                 // for compatibility, first do the lookup and then verify
                 // the provider. this makes the difference between a NSAE

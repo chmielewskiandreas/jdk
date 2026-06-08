@@ -42,6 +42,8 @@ import java.security.Security;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import sun.security.jca.ProvidersFilter;
+
 /**
  * A static class for creating SASL clients and servers.
  *<p>
@@ -419,7 +421,9 @@ public class Sasl {
             if (provs != null) {
                 for (Provider p : provs) {
                     service = p.getService(type, mechName);
-                    if (service == null) {
+                    if (service == null ||
+                            !ProvidersFilter.isServiceAllowed(
+                                    p.getName(), service.getType(), service.getAlgorithm())) {
                         // no such service exists
                         continue;
                     }
@@ -565,7 +569,9 @@ public class Sasl {
         if (provs != null) {
             for (Provider p : provs) {
                 service = p.getService(type, mechanism);
-                if (service == null) {
+                if (service == null ||
+                        !ProvidersFilter.isServiceAllowed(
+                                p.getName(), service.getType(), service.getAlgorithm())) {
                     throw new SaslException("Provider does not support " +
                         mechanism + " " + type);
                 }
@@ -640,7 +646,9 @@ public class Sasl {
             Iterator<Service> iter = p.getServices().iterator();
             while (iter.hasNext()) {
                 Service s = iter.next();
-                if (s.getType().equals(serviceName)) {
+                if (s.getType().equals(serviceName) &&
+                        ProvidersFilter.isServiceAllowed(
+                                p.getName(), s.getType(), s.getAlgorithm())) {
                     try {
                         fac = loadFactory(s);
                         if (fac != null) {

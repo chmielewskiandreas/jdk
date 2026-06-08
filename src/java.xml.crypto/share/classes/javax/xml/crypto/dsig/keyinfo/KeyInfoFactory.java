@@ -44,6 +44,7 @@ import javax.xml.crypto.XMLStructure;
 import javax.xml.crypto.dom.DOMStructure;
 import javax.xml.crypto.dsig.*;
 
+import sun.security.jca.ProvidersFilter;
 
 /**
  * A factory for creating {@link KeyInfo} objects from scratch or for
@@ -158,7 +159,9 @@ public abstract class KeyInfoFactory {
         Provider[] provs = Security.getProviders();
         for (Provider p : provs) {
             Service s = p.getService("KeyInfoFactory", mechanismType);
-            if (s != null) {
+            if (s != null &&
+                    ProvidersFilter.isServiceAllowed(
+                            p.getName(), s.getType(), s.getAlgorithm())) {
                 Object obj = null;
                 try {
                     obj = s.newInstance(null);
@@ -209,7 +212,9 @@ public abstract class KeyInfoFactory {
         }
 
         Service s = provider.getService("KeyInfoFactory", mechanismType);
-        if (s != null) {
+        if (s != null &&
+                ProvidersFilter.isServiceAllowed(
+                        provider.getName(), s.getType(), s.getAlgorithm())) {
             Object obj = null;
             try {
                 obj = s.newInstance(null);
@@ -270,7 +275,9 @@ public abstract class KeyInfoFactory {
                                               provider);
         }
         Service s = p.getService("KeyInfoFactory", mechanismType);
-        if (s != null) {
+        if (s != null &&
+                ProvidersFilter.isServiceAllowed(
+                        p.getName(), s.getType(), s.getAlgorithm())) {
             Object obj = null;
             try {
                 obj = s.newInstance(null);

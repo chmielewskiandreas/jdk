@@ -37,6 +37,8 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import sun.security.jca.ProvidersFilter;
+
 /**
  * This class provides a cryptographically strong random number
  * generator (RNG).
@@ -280,15 +282,28 @@ public class SecureRandom extends java.util.Random {
             if (p.getName().equals("SUN")) {
                 prngAlgorithm = SunEntries.DEF_SECURE_RANDOM_ALGO;
                 prngService = p.getService("SecureRandom", prngAlgorithm);
+                if (prngService != null) {
+                    if (ProvidersFilter.isServiceAllowed(
+                            p.getName(), prngService.getType(), prngService.getAlgorithm())) {
+                        break;
+                    }
+                    prngService = null;
+                }
                 break;
             } else {
                 prngService = p.getDefaultSecureRandomService();
                 if (prngService != null) {
-                    prngAlgorithm = prngService.getAlgorithm();
+                    if (ProvidersFilter.isServiceAllowed(
+                            p.getName(), prngService.getType(), prngService.getAlgorithm())) {
+                        prngAlgorithm = prngService.getAlgorithm();
+                        break;
+                    }
+                    prngService = null;
                     break;
                 }
             }
         }
+
         // per javadoc, if none of the Providers support an RNG algorithm,
         // then an implementation-specific default is returned.
         if (prngService == null) {

@@ -1,0 +1,745 @@
+/*
+ * Copyright (c) 2026, Red Hat, Inc.
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
+package sun.security.jca;
+
+import java.io.Closeable;
+import java.nio.CharBuffer;
+import java.security.Provider;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
+import jdk.internal.access.SharedSecrets;
+import sun.security.util.Debug;
+import sun.security.util.SecurityProperties;
+
+/**
+ * Provides infrastructure to evaluate whether security services offered by
+ * providers are allowed for use at runtime.
+ *
+ * <p>
+ * Filtering is applied during service lookup and use. A service that is not
+ * allowed is treated as if it were not provided.
+ *
+ * <p>
+ * This class is an internal component of the JCA provider selection mechanism
+ * and is used by service lookup and instantiation paths to enforce filtering
+ * decisions consistently.
+ *
+ * @author Martin Balao
+ * @author Francisco Ferrari Bihurriet
+ * @author Andreas Chmielewski
+ * @since TODO
+ */
+public final class ProvidersFilter {
+
+    private static final String FILTER_PROP = "jdk.security.providers.filter";
+
+    private static final Debug debug = Debug.getInstance("jca",
+            "ProvidersFilter");
+
+
+    private static final class FilterDecision {
+        private enum Result {
+            DENY,
+            ALLOW,
+            UNDECIDED
+        }
+        private static final int UNDEFINED_PRIORITY = -1;
+        private static final FilterDecision UNDECIDED = new FilterDecision();
+        private final Result result;
+        private final int priority;
+
+        private FilterDecision() {
+            this.result = Result.UNDECIDED;
+            this.priority = UNDEFINED_PRIORITY;
+        }
+
+        FilterDecision(Result result, int priority) {
+            assert result != Result.UNDECIDED : "Invalid result.";
+            assert priority >= 0 : "Invalid priority";
+            this.result = result;
+            this.priority = priority;
+        }
+
+        boolean isAllow() {
+            return result == ProvidersFilter.FilterDecision.Result.ALLOW;
+        }
+
+        @Override
+        public String toString() {
+            return result + (priority != UNDEFINED_PRIORITY ? " - priority: " +
+                    priority : "");
+        }
+
+        void debugDisplay() {
+            if (debug == null) {
+                return;
+            }
+            debug.println(" * Decision: " + this);
+        }
+    }
+
+    private record FilterQuery(String provider, String serviceType, String algorithm) {
+        private FilterQuery {
+            assert provider != null && serviceType != null && algorithm != null :
+                    "Invalid FilterQuery.";
+        }
+
+        @Override
+        public String toString() {
+            return "Service filter query (Provider: " + provider + ", Service type: " +
+                    serviceType + ", Algorithm: " + algorithm + ")";
+        }
+    }
+
+    private static final class Filter {
+        private sealed interface Rule permits PatternRule, DefaultRule {
+            FilterDecision apply(FilterQuery q);
+        }
+
+        private record PatternRuleComponent(Type type, String value, Pattern regexp) {
+            enum Type {
+                PROVIDER("Provider"),
+                SERVICE_TYPE("Service type"),
+                ALGORITHM("Algorithm");
+
+                private final String type;
+
+                Type(String type) {
+                    this.type = type;
+                }
+
+                @Override
+                public String toString() {
+                    return type;
+                }
+            }
+
+            private static final Pattern ALL_PATTERN = Pattern.compile(".*");
+
+            static final PatternRuleComponent ANY_SERVICE_TYPE = new PatternRuleComponent(Type.SERVICE_TYPE, "*",
+                    ALL_PATTERN);
+
+            static final PatternRuleComponent ANY_ALGORITHM = new PatternRuleComponent(Type.ALGORITHM, "*",
+                    ALL_PATTERN);
+
+            PatternRuleComponent {
+                assert value != null && !value.isEmpty() && regexp != null :
+                        "Invalid PatternRuleComponent instance.";
+            }
+
+            @Override
+            public String toString() {
+                return value;
+            }
+
+            void debugDisplay() {
+                if (debug == null) {
+                    return;
+                }
+                debug.println(" * " + type + ": " + value + " (regexp: " +
+                        regexp + ")");
+            }
+        }
+
+        private static final class PatternRule implements Rule {
+            private FilterDecision decision;
+            private PatternRuleComponent provider;
+            private PatternRuleComponent serviceType;
+            private PatternRuleComponent algorithm;
+
+            @Override
+            public FilterDecision apply(FilterQuery q) {
+                assert assertIsValid();
+                if (provider.regexp.matcher(q.provider).matches() &&
+                        serviceType.regexp.matcher(q.serviceType).matches() &&
+                        algorithm.regexp.matcher(q.algorithm).matches()) {
+                    return decision;
+                }
+                return FilterDecision.UNDECIDED;
+            }
+
+            private boolean assertIsValid() {
+                assert decision.result != FilterDecision.Result.UNDECIDED :
+                        "Invalid decision result.";
+                assert decision.priority != FilterDecision.UNDEFINED_PRIORITY :
+                        "Invalid decision priority.";
+                assert provider != null : "Invalid provider.";
+                assert serviceType != null : "Invalid service type.";
+                assert algorithm != null : "Invalid algorithm.";
+                return true;
+            }
+
+            @Override
+            public String toString() {
+                return (decision.result == FilterDecision.Result.DENY ? "!" :
+                        "") + provider + "." + serviceType + "." + algorithm;
+            }
+
+            void debugDisplay() {
+                if (debug == null) {
+                    return;
+                }
+                provider.debugDisplay();
+                serviceType.debugDisplay();
+                algorithm.debugDisplay();
+                decision.debugDisplay();
+            }
+        }
+
+        private static final class DefaultRule implements Rule {
+            private final FilterDecision d;
+
+            DefaultRule(int priority) {
+                d = new FilterDecision(FilterDecision.Result.DENY, priority);
+            }
+
+            @Override
+            public FilterDecision apply(FilterQuery q) {
+                return d;
+            }
+
+            @Override
+            public String toString() {
+                return "!* (DEFAULT)";
+            }
+        }
+
+        private static final class ParserException extends Exception {
+            @java.io.Serial
+            private static final long serialVersionUID = -6981287318167654426L;
+
+            private static final String LN = System.lineSeparator();
+
+            private static final String HEADER_STR = " * Filter string: ";
+
+            private static final String MORE_STR = "(...)";
+
+            private static final int MORE_TOTAL = MORE_STR.length() + 1;
+
+            private static final int MAX_MARK = 7;
+
+            private static final int MAX_LINE = 80;
+
+            static {
+                assert MAX_LINE >= HEADER_STR.length() + (MORE_TOTAL * 2) + 1
+                        : "Not enough line space.";
+            }
+
+            private static String addStateInfo(String message, Parser parser) {
+                StringBuilder sb = new StringBuilder();
+                sb.append(message);
+                sb.append(LN);
+                sb.append(" * State: ");
+                sb.append(parser.state);
+                sb.append(LN);
+                renderFilterStr(parser.filterBuff.asReadOnlyBuffer(), sb);
+                return sb.toString();
+            }
+
+            private static void renderFilterStr(CharBuffer filterBuff,
+                    StringBuilder sb) {
+                int filterBuffLen = filterBuff.limit();
+                int cursor = filterBuff.position() - 1;
+                int preCutMark, postCutMark;
+                int lineAvailable = MAX_LINE - HEADER_STR.length() - 1;
+                int preAvailable = lineAvailable / 2;
+                int postAvailable = (lineAvailable + 1) / 2;
+                boolean preMore = false, postMore = false;
+                int preCursor, preSpaceCount, preDashCount, postDashCount;
+
+                // Calculate the filter line
+                if (preAvailable < cursor) {
+                    preMore = true;
+                    preAvailable -= MORE_TOTAL;
+                }
+                if (postAvailable + cursor + 1 < filterBuffLen) {
+                    postMore = true;
+                    postAvailable -= MORE_TOTAL;
+                }
+                preCutMark = Math.max(0, cursor - preAvailable);
+                preAvailable -= cursor - preCutMark;
+                postCutMark = Math.min(filterBuffLen, cursor + 1 +
+                        postAvailable);
+                postAvailable -= postCutMark - (cursor + 1);
+                if (postAvailable > 0 && preMore) {
+                    if (preCutMark - (postAvailable + MORE_TOTAL) <= 0) {
+                        postAvailable += MORE_TOTAL;
+                        preMore = false;
+                    }
+                    preCutMark = Math.max(0, preCutMark - postAvailable);
+                }
+                if (preAvailable > 0 && postMore) {
+                    if (postCutMark + preAvailable + MORE_TOTAL >=
+                            filterBuffLen) {
+                        preAvailable += MORE_TOTAL;
+                        postMore = false;
+                    }
+                    postCutMark = Math.min(filterBuffLen, postCutMark +
+                            preAvailable);
+                }
+
+                // Calculate the underlining line
+                preCursor = HEADER_STR.length() + (preMore ? MORE_TOTAL : 0) +
+                        cursor - preCutMark;
+                preSpaceCount = Math.max(0, preCursor - MAX_MARK/2);
+                preDashCount = Math.min(preCursor, MAX_MARK/2);
+                postDashCount = Math.min(MAX_LINE - 1 - preSpaceCount -
+                        preDashCount, MAX_MARK/2);
+
+                // Render the filter line
+                sb.append(HEADER_STR);
+                if (preMore) {
+                    sb.append(MORE_STR);
+                    sb.append(' ');
+                }
+                filterBuff.position(0);
+                sb.append(filterBuff, preCutMark, postCutMark);
+                if (postMore) {
+                    sb.append(' ');
+                    sb.append(MORE_STR);
+                }
+                sb.append(LN);
+
+                // Render the underlining line
+                sb.append(" ".repeat(preSpaceCount));
+                sb.append("-".repeat(preDashCount));
+                sb.append("^");
+                sb.append("-".repeat(postDashCount));
+                sb.append(LN);
+            }
+
+            ParserException(String message, Parser parser) {
+                super(addStateInfo(message, parser));
+            }
+        }
+
+        private static final class Parser {
+            private enum ParsingState {
+                PRE_PATTERN,
+                PRE_PATTERN_DENY,
+                PATTERN,
+                POST_PATTERN
+            }
+
+            private enum Transition {
+                WHITESPACE_CHAR,
+                DENY_CHAR,
+                REGULAR_CHAR,
+                PATTERN_LEVEL_CHAR,
+                PATTERN_END_CHAR
+            }
+
+            static List<Rule> parse(String filterStr) throws ParserException {
+                return new Parser(filterStr).getRules();
+            }
+
+            private final CharBuffer filterBuff;
+            private final List<Rule> rules;
+            private PatternRule rule;
+            private ParsingState state;
+            private final StringBuffer buff;
+            private final StringBuffer buffR;
+            private boolean escape;
+            private boolean quote;
+
+            private Parser(String filterStr) throws ParserException {
+                filterBuff = CharBuffer.wrap(filterStr);
+                rules = new ArrayList<>();
+                rule = new PatternRule();
+                state = ParsingState.PRE_PATTERN;
+                buff = new StringBuffer();
+                buffR = new StringBuffer();
+                escape = false;
+                quote = false;
+                parse();
+            }
+
+            private List<Rule> getRules() {
+                return rules;
+            }
+
+            private PatternRuleComponent getComponent(
+                    PatternRuleComponent.Type type) throws ParserException {
+                if (buff.isEmpty()) {
+                    throw new ParserException("Missing " +
+                            type.toString().toLowerCase() + " in " +
+                            "pattern rule.", this);
+                }
+                if (quote) {
+                    buffR.append("\\E");
+                    quote = false;
+                }
+                return new PatternRuleComponent(type, buff.toString(),
+                        Pattern.compile(buffR.toString(),
+                                Pattern.CASE_INSENSITIVE));
+            }
+
+            private void flushBuffers() throws ParserException {
+                if (rule.provider == null) {
+                    rule.provider = getComponent(
+                            PatternRuleComponent.Type.PROVIDER);
+                } else if (rule.serviceType == null) {
+                    rule.serviceType = getComponent(
+                            PatternRuleComponent.Type.SERVICE_TYPE);
+                } else if (rule.algorithm == null) {
+                    rule.algorithm = getComponent(
+                            PatternRuleComponent.Type.ALGORITHM);
+                } else {
+                    assert false : "Should not reach.";
+                }
+                buff.setLength(0);
+                buffR.setLength(0);
+            }
+
+            private void endPattern() throws ParserException {
+                if (escape) {
+                    throw new ParserException("Invalid escaping.", this);
+                }
+                flushBuffers();
+                if (rule.serviceType == null) {
+                    rule.serviceType = PatternRuleComponent.ANY_SERVICE_TYPE;
+                }
+                if (rule.algorithm == null) {
+                    rule.algorithm = PatternRuleComponent.ANY_ALGORITHM;
+                }
+                if (debug != null) {
+                    debug.println("--------------------");
+                    debug.println("Rule parsed: " + rule);
+                    rule.debugDisplay();
+                }
+                rules.add(rule);
+                rule = new PatternRule();
+            }
+
+            /*
+             * Transition to the next state if there is a valid reason. If the
+             * reason is not valid, throw an exception. If there are no reasons
+             * to transition, stay in the same state.
+             */
+            private void nextState(Transition transition)
+                    throws ParserException {
+                if (state == ParsingState.PRE_PATTERN) {
+                    if (transition == Transition.WHITESPACE_CHAR) {
+                        // Stay in PRE_PATTERN state and ignore whitespaces
+                        // at the beginning of a pattern:
+                        //
+                        // "    Provider.ServiceType.Algorithm;"
+                        //  ^^^^
+                        //
+                        // or
+                        //
+                        // "    !    Provider.ServiceType.Algorithm;"
+                        //  ^^^^
+                    } else if (transition == Transition.REGULAR_CHAR) {
+                        // Transition to PATTERN state:
+                        //
+                        // "   Provider.ServiceType.Algorithm;"
+                        //     ^^^^
+                        state = ParsingState.PATTERN;
+                        rule.decision = new FilterDecision(
+                                FilterDecision.Result.ALLOW, rules.size());
+                    } else if (transition == Transition.DENY_CHAR) {
+                        // Transition to PRE_PATTERN_DENY state:
+                        //
+                        // "   !    Provider.ServiceType.Algorithm;"
+                        //      ^^^^
+                        state = ParsingState.PRE_PATTERN_DENY;
+                        rule.decision = new FilterDecision(
+                                FilterDecision.Result.DENY, rules.size());
+                    } else {
+                        throw new ParserException("A pattern must start with " +
+                                "a '!' or a security provider name.", this);
+                    }
+                } else if (state == ParsingState.PRE_PATTERN_DENY) {
+                    if (transition == Transition.WHITESPACE_CHAR) {
+                        // Stay in PRE_PATTERN_DENY state and ignore whitespaces
+                        // before the provider:
+                        //
+                        // "   !    Provider.ServiceType.Algorithm;"
+                        //      ^^^^
+                    } else if (transition == Transition.REGULAR_CHAR) {
+                        // Transition to PATTERN state:
+                        //
+                        // "   !    Provider.ServiceType.Algorithm;"
+                        //          ^^^^
+                        state = ParsingState.PATTERN;
+                    } else {
+                        throw new ParserException("A pattern must have a " +
+                                "security provider name after '!'.", this);
+                    }
+                } else if (state == ParsingState.PATTERN) {
+                    if (transition == Transition.REGULAR_CHAR) {
+                        // Stay in PATTERN while the provider, service type
+                        // and algorithm names fill up:
+                        //
+                        // "   Provider.ServiceType.Algorithm;"
+                        //     ^^^^
+                    } else if (transition == Transition.WHITESPACE_CHAR) {
+                        // Transition to POST_PATTERN state, after recording
+                        // the parsed rule:
+                        //
+                        // "   Provider.ServiceType.Algorithm    ;"
+                        //                                   ^^^^
+                        endPattern();
+                        state = ParsingState.POST_PATTERN;
+                    } else if (transition == Transition.PATTERN_END_CHAR) {
+                        // Transition to PRE_PATTERN state, after recording
+                        // the parsed rule:
+                        //
+                        // "   Provider.ServiceType.Algorithm;    Provider..."
+                        //                                  ^^^
+                        endPattern();
+                        state = ParsingState.PRE_PATTERN;
+                    } else if (transition == Transition.PATTERN_LEVEL_CHAR) {
+                        // Stay in PATTERN state while recording characters
+                        // for the next level (service type or algorithm):
+                        //
+                        // "    Provider.ServiceType.Algorithm;"
+                        //               ^^^^
+                        if (rule.serviceType != null) {
+                            throw new ParserException("Too many levels. Dots " +
+                                    "that are part of a provider name, " +
+                                    "service type or algorithm must be " +
+                                    "escaped.", this);
+                        }
+                        flushBuffers();
+                    } else {
+                        throw new ParserException("Invalid name in pattern.",
+                                this);
+                    }
+                } else if (state == ParsingState.POST_PATTERN) {
+                    if (transition == Transition.WHITESPACE_CHAR) {
+                        // Stay in POST_PATTERN state and ignore whitespaces
+                        // until the end of the pattern:
+                        //
+                        // "    Provider.ServiceType.Algorithm    ;    Provider"
+                        //                                    ^^^^
+                    } else if (transition == Transition.PATTERN_END_CHAR) {
+                        // Transition to PRE_PATTERN state:
+                        //
+                        // "    Provider.ServiceType.Algorithm    ;    Provider"
+                        //                                       ^^^
+                        state = ParsingState.PRE_PATTERN;
+                    } else {
+                        throw new ParserException("Unescaped whitespaces are " +
+                                "only valid at the end of a pattern. " +
+                                "Whitespace characters internal to a " +
+                                "provider name, service type or algorithm " +
+                                "must be escaped.", this);
+                    }
+                } else {
+                    // Should not reach.
+                    throw new RuntimeException("Unexpected Providers filter " +
+                            "parser state.");
+                }
+            }
+
+            private void appendChar(char c) {
+                if (c == '*' && !escape) {
+                    // Character is a wildcard.
+                    if (quote) {
+                        buffR.append("\\E");
+                        quote = false;
+                    }
+                    buffR.append(".*");
+                } else {
+                    // Character is not a wildcard.
+                    if (escape) {
+                        buff.append("\\");
+                    }
+                    if (!quote) {
+                        buffR.append("\\Q");
+                        quote = true;
+                    }
+                    buffR.append(c);
+                    if (c == '\\') {
+                        // A '\' could be problematic because if an 'E' comes
+                        // next the sequence "\E" would interfere with regexp
+                        // quoting. Split these sequences into separated
+                        // quoting units. I.e: "...\\E\QE...".
+                        buffR.append("\\E\\Q");
+                    }
+                }
+                buff.append(c);
+            }
+
+            private void parse() throws ParserException {
+                if (debug != null) {
+                    debug.println("Parsing: " + filterBuff);
+                }
+                assert filterBuff.hasRemaining() : "Cannot parse an empty " +
+                        "filter.";
+                while (filterBuff.hasRemaining()) {
+                    char c = filterBuff.get();
+                    if (c == '\n' || c == '\0') {
+                        throw new ParserException("Invalid filter character: " +
+                                "'" + c + "'", this);
+                    } else if (escape) {
+                        appendChar(c);
+                        escape = false;
+                    } else if (c == '\\') {
+                        nextState(Transition.REGULAR_CHAR);
+                        escape = true;
+                    } else if (c == '.') {
+                        nextState(Transition.PATTERN_LEVEL_CHAR);
+                    } else if (c == ';') {
+                        nextState(Transition.PATTERN_END_CHAR);
+                    } else if (Character.isWhitespace(c)) {
+                        nextState(Transition.WHITESPACE_CHAR);
+                    } else if (c == '!') {
+                        nextState(Transition.DENY_CHAR);
+                    } else if (c == ':' || c == ',') {
+                        throw new ParserException("Reserved character '" + c +
+                                "' must be escaped.", this);
+                    } else {
+                        nextState(Transition.REGULAR_CHAR);
+                        appendChar(c);
+                    }
+                }
+                if (state != ParsingState.PRE_PATTERN || rules.size() == 0) {
+                    nextState(Transition.PATTERN_END_CHAR);
+                }
+                assert state == ParsingState.PRE_PATTERN : "Parser state " +
+                        "must finish in PRE_PATTERN.";
+            }
+        }
+
+        private final List<Rule> rules;
+
+        Filter(String filterStr) throws IllegalArgumentException {
+            try {
+                rules = Parser.parse(filterStr);
+            } catch (ParserException e) {
+                throw new IllegalArgumentException("Invalid Providers filter:" +
+                        " " + filterStr, e);
+            }
+            rules.add(new DefaultRule(rules.size()));
+        }
+
+        FilterDecision apply(FilterQuery q) {
+            for (Rule r : rules) {
+                FilterDecision d = r.apply(q);
+                if (d != FilterDecision.UNDECIDED) {
+                    if (debug != null) {
+                        debug.println("--------------------");
+                        debug.println(q.toString());
+                        debug.println(" * Decision: " + d);
+                        debug.println(" * Made by: " + r);
+                    }
+                    return d;
+                }
+            }
+            // Should never reach this point: there is always a DefaultRule
+            // capable of deciding.
+            throw new RuntimeException("Unexpected Providers filter failure: " +
+                    "decision not made.");
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("Filter: ");
+            Iterator<Rule> ri = rules.iterator();
+            while (ri.hasNext()) {
+                sb.append(ri.next());
+                if (ri.hasNext()) {
+                    sb.append("; ");
+                }
+            }
+            return sb.toString();
+        }
+    }
+
+    private static final Filter filter;
+
+    static {
+        Filter tmpFilter = null;
+        String fStr = SecurityProperties.getOverridableProperty(FILTER_PROP);
+        if (debug != null) {
+            debug.println("Filter property value read at this point:");
+            for (StackTraceElement ste : new Exception().getStackTrace()) {
+                debug.println(" ".repeat(4) + ste);
+            }
+        }
+        if (fStr != null && !fStr.isEmpty()) {
+            tmpFilter = new Filter(fStr);
+        }
+        filter = tmpFilter;
+        if (debug != null) {
+            debug.println(filter != null ? filter.toString() : "No filter");
+        }
+    }
+
+    /**
+     * Determines whether a JCA service identified by the given parameters is
+     * allowed by the currently configured providers filter.
+     *
+     * <p>
+     * This method evaluates the service against the filter configured via the
+     * {@code jdk.security.providers.filter} security property. If no filter is
+     * configured, all services are considered allowed.
+     *
+     * <p>
+     * The decision is made by matching the supplied provider name, service type,
+     * and algorithm against the filter rules. The first matching rule determines
+     * whether the service is allowed or denied. If no rule matches, the default
+     * behavior is to deny the service.
+     *
+     * <p>
+     * This method is intended to be invoked during provider service selection
+     * (e.g. {@code getInstance} lookups).
+     *
+     * <p>
+     * Matching is performed using case-insensitive pattern rules defined by the
+     * filter.
+     *
+     * @param providerName the name of the provider offering the service, must not
+     *                     be {@code null}
+     * @param serviceType  the type of the service (e.g. "Cipher", "Signature",
+     *                     "XMLSignatureFactory"), must not be {@code null}
+     * @param algorithm    the algorithm or mechanism name associated with the
+     *                     service, must not be {@code null}
+     *
+     * @return {@code true} if the service is allowed by the filter, or if no filter
+     *         is configured; {@code false} if the service is denied
+     */
+    public static boolean isServiceAllowed(String providerName, String serviceType, String algorithm) {
+        if (filter == null) {
+            return true;
+        }
+        FilterDecision d = isAllowed(providerName, serviceType, algorithm);
+        return d.isAllow();
+    }
+
+    private static FilterDecision isAllowed(String providerName, String serviceType, String algorithm) {
+        return filter.apply(new FilterQuery(providerName, serviceType, algorithm));
+    }
+}

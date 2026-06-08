@@ -37,6 +37,8 @@ import javax.crypto.SecretKey;
 import javax.security.auth.DestroyFailedException;
 import javax.security.auth.callback.*;
 
+import sun.security.jca.ProvidersFilter;
+
 import sun.security.util.Debug;
 import sun.security.util.CryptoAlgorithmConstraints;
 
@@ -1882,7 +1884,9 @@ public class KeyStore {
             // Detect the keystore type
             for (Provider p : Security.getProviders()) {
                 for (Provider.Service s : p.getServices()) {
-                    if (s.getType().equals("KeyStore")) {
+                    if (s.getType().equals("KeyStore") &&
+                            ProvidersFilter.isServiceAllowed(
+                                    p.getName(), s.getType(), s.getAlgorithm())) {
                         try {
                             KeyStoreSpi impl = (KeyStoreSpi) s.newInstance(null);
                             if (impl.engineProbe(dataStream)) {
