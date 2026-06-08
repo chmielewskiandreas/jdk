@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1121,6 +1121,24 @@ public abstract class Provider extends Properties {
      * {@link #putService putService()} and one added via {@link #put put()},
      * the service added via {@link #putService putService()} is returned.
      *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     *
+     * All registered service is still returned by this method, regardless
+     * of the filter configuration. However, if a service is disabled by the
+     * filter, it will behave as if it were unavailable when used. In
+     * particular, attempts to obtain such a service via
+     * {@code getInstance(...)} will fail with a
+     * {@code NoSuchAlgorithmException}.
+     * </li>
+     * </ul>
+     *
      * @param type the type of {@link Service service} requested
      * (for example, {@code MessageDigest})
      * @param algorithm the case-insensitive algorithm name (or alternate
@@ -1175,6 +1193,24 @@ public abstract class Provider extends Properties {
      * Get an unmodifiable Set of all services supported by
      * this {@code Provider}.
      *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     *
+     * All registered services are still returned by this method, regardless
+     * of the filter configuration. However, if a service is disabled by the
+     * filter, it will behave as if it were unavailable when used. In
+     * particular, attempts to obtain such a service via
+     * {@code getInstance(...)} will fail with a
+     * {@code NoSuchAlgorithmException}.
+     * </li>
+     * </ul>
+     *
      * @return an unmodifiable Set of all services supported by
      * this {@code Provider}
      *
@@ -1211,6 +1247,23 @@ public abstract class Provider extends Properties {
      * in the provider's Hashtable values in the format described in the
      * {@extLink security_guide_jca
      * Java Cryptography Architecture (JCA) Reference Guide}.
+     *
+     * @implNote
+     * The JDK Reference Implementation additionally uses the following
+     * security properties:
+     * <ul>
+     * <li>the {@code jdk.security.providers.filter}
+     * {@link System#getProperty(String) System} and
+     * {@link Security#getProperty(String) Security} properties to determine
+     * which {@linkplain java.security.Provider.Service services} are enabled.
+     *
+     * Services may be ignored by the filter and treated as unavailable
+     * during lookup or instantiation. In such cases, calls to
+     * {@code getInstance(...)} will fail with a
+     * {@code NoSuchAlgorithmException}, even if the service has been
+     * registered via this method.
+     * </li>
+     * </ul>
      *
      * @param s the Service to add
      *
