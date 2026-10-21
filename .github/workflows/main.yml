@@ -34,7 +34,7 @@ on:
       platforms:
         description: 'Platform(s) to execute on (comma separated, e.g. "linux-x64, macos, aarch64")'
         required: true
-        default: 'linux-x64, linux-x64-variants, linux-aarch64, linux-cross-compile, alpine-linux-x64, macos-x64, macos-aarch64, windows-x64, windows-aarch64, docs'
+        default: 'linux-x64'
       configure-arguments:
         description: 'Additional configure arguments'
         required: false
@@ -63,15 +63,6 @@ jobs:
       EXCLUDED_PLATFORMS: 'alpine-linux-x64,macos-x64'
     outputs:
       linux-x64: ${{ steps.include.outputs.linux-x64 }}
-      linux-x64-variants: ${{ steps.include.outputs.linux-x64-variants }}
-      linux-aarch64: ${{ steps.include.outputs.linux-aarch64 }}
-      linux-cross-compile: ${{ steps.include.outputs.linux-cross-compile }}
-      alpine-linux-x64: ${{ steps.include.outputs.alpine-linux-x64 }}
-      macos-x64: ${{ steps.include.outputs.macos-x64 }}
-      macos-aarch64: ${{ steps.include.outputs.macos-aarch64 }}
-      windows-x64: ${{ steps.include.outputs.windows-x64 }}
-      windows-aarch64: ${{ steps.include.outputs.windows-aarch64 }}
-      docs: ${{ steps.include.outputs.docs }}
       dry-run: ${{ steps.include.outputs.dry-run }}
 
     steps:
@@ -176,15 +167,6 @@ jobs:
           }
 
           echo "linux-x64=$(check_platform linux-x64 linux x64)" >> $GITHUB_OUTPUT
-          echo "linux-x64-variants=$(check_platform linux-x64-variants variants)" >> $GITHUB_OUTPUT
-          echo "linux-aarch64=$(check_platform linux-aarch64 linux aarch64)" >> $GITHUB_OUTPUT
-          echo "linux-cross-compile=$(check_platform linux-cross-compile cross-compile)" >> $GITHUB_OUTPUT
-          echo "alpine-linux-x64=$(check_platform alpine-linux-x64 alpine-linux x64)" >> $GITHUB_OUTPUT
-          echo "macos-x64=$(check_platform macos-x64 macos x64)" >> $GITHUB_OUTPUT
-          echo "macos-aarch64=$(check_platform macos-aarch64 macos aarch64)" >> $GITHUB_OUTPUT
-          echo "windows-x64=$(check_platform windows-x64 windows x64)" >> $GITHUB_OUTPUT
-          echo "windows-aarch64=$(check_platform windows-aarch64 windows aarch64)" >> $GITHUB_OUTPUT
-          echo "docs=$(check_platform docs)" >> $GITHUB_OUTPUT
           echo "dry-run=$(check_dry_run)" >> $GITHUB_OUTPUT
 
   ###
@@ -203,211 +185,6 @@ jobs:
       dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
     if: needs.prepare.outputs.linux-x64 == 'true'
 
-  build-linux-aarch64:
-    name: linux-aarch64
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-aarch64
-      runs-on: 'ubuntu-24.04-arm'
-      bootjdk-platform: linux-aarch64
-      gcc-major-version: '14'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.linux-aarch64 == 'true'
-
-  build-linux-x64-hs-nopch:
-    name: linux-x64-hs-nopch
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-x64
-      make-target: 'hotspot'
-      debug-levels: '[ "debug" ]'
-      gcc-major-version: '10'
-      extra-conf-options: '--disable-precompiled-headers'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.linux-x64-variants == 'true'
-
-  build-linux-x64-hs-zero:
-    name: linux-x64-hs-zero
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-x64
-      make-target: 'hotspot'
-      debug-levels: '[ "debug" ]'
-      gcc-major-version: '10'
-      extra-conf-options: '--with-jvm-variants=zero --disable-precompiled-headers'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.linux-x64-variants == 'true'
-
-  build-linux-x64-hs-minimal:
-    name: linux-x64-hs-minimal
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-x64
-      make-target: 'hotspot'
-      debug-levels: '[ "debug" ]'
-      gcc-major-version: '10'
-      extra-conf-options: '--with-jvm-variants=minimal --disable-precompiled-headers'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.linux-x64-variants == 'true'
-
-  build-linux-x64-hs-optimized:
-    name: linux-x64-hs-optimized
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-x64
-      make-target: 'hotspot'
-      # Technically this is not the "debug" level, but we can't inject a new matrix state for just this job
-      debug-levels: '[ "debug" ]'
-      gcc-major-version: '10'
-      extra-conf-options: '--with-debug-level=optimized --disable-precompiled-headers'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.linux-x64-variants == 'true'
-
-  build-linux-x64-static:
-    name: linux-x64-static
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-x64
-      make-target: 'static-jdk-bundles'
-      # There are issues with fastdebug static build in GHA due to space limit.
-      # Only do release build for now.
-      debug-levels: '[ "release" ]'
-      gcc-major-version: '10'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      static-suffix: "-static"
-    if: needs.prepare.outputs.linux-x64 == 'true'
-
-  build-linux-x64-static-libs:
-    name: linux-x64-static-libs
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-x64
-      make-target: 'static-libs-bundles'
-      # Only build static-libs-bundles for release builds.
-      # For debug builds, building static-libs often exceeds disk space.
-      debug-levels: '[ "release" ]'
-      gcc-major-version: '10'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      # Upload static libs bundles separately to avoid interference with normal linux-x64 bundle.
-      # This bundle is not used by testing jobs, but downstreams use it to check that
-      # dependent projects build fine.
-      bundle-suffix: "-static-libs"
-    if: needs.prepare.outputs.linux-x64-variants == 'true'
-
-  build-linux-cross-compile:
-    name: linux-cross-compile
-    needs: prepare
-    uses: ./.github/workflows/build-cross-compile.yml
-    with:
-      gcc-major-version: '10'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.linux-cross-compile == 'true'
-
-  build-alpine-linux-x64:
-    name: alpine-linux-x64
-    needs: prepare
-    uses: ./.github/workflows/build-alpine-linux.yml
-    with:
-      platform: alpine-linux-x64
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.alpine-linux-x64 == 'true'
-
-  build-macos-x64:
-    name: macos-x64
-    needs: prepare
-    uses: ./.github/workflows/build-macos.yml
-    with:
-      platform: macos-x64
-      runs-on: 'macos-15-intel'
-      xcode-toolset-version: '16.4'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }} --enable-deprecated-ports
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.macos-x64 == 'true'
-
-  build-macos-aarch64:
-    name: macos-aarch64
-    needs: prepare
-    uses: ./.github/workflows/build-macos.yml
-    with:
-      platform: macos-aarch64
-      runs-on: 'macos-15'
-      xcode-toolset-version: '16.4'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.macos-aarch64 == 'true'
-
-  build-windows-x64:
-    name: windows-x64
-    needs: prepare
-    uses: ./.github/workflows/build-windows.yml
-    with:
-      platform: windows-x64
-      runs-on: windows-2022
-      architecture: 'x86.x64'
-      msvc-toolset-version: '14.44'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.windows-x64 == 'true'
-
-  build-windows-aarch64:
-    name: windows-aarch64
-    needs: prepare
-    uses: ./.github/workflows/build-windows.yml
-    with:
-      platform: windows-aarch64
-      runs-on: windows-11-arm
-      architecture: 'ARM64'
-      msvc-toolset-version: '14.51'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.windows-aarch64 == 'true'
-
-  build-docs:
-    name: docs
-    needs: prepare
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      platform: linux-x64
-      debug-levels: '[ "debug" ]'
-      make-target: 'docs-jdk-bundles'
-      # Make sure we never try to make full docs, since that would require a
-      # build JDK, and we do not need the additional testing of the graphs.
-      extra-conf-options: '--disable-full-docs'
-      gcc-major-version: '10'
-      configure-arguments: ${{ github.event.inputs.configure-arguments }}
-      make-arguments: ${{ github.event.inputs.make-arguments }}
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-    if: needs.prepare.outputs.docs == 'true'
-
   ###
   ### Test jobs
   ###
@@ -425,71 +202,3 @@ jobs:
       dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
       debug-suffix: -debug
 
-  test-linux-x64-static:
-    name: linux-x64-static
-    needs:
-      - prepare
-      - build-linux-x64
-      - build-linux-x64-static
-    uses: ./.github/workflows/test.yml
-    with:
-      platform: linux-x64
-      bootjdk-platform: linux-x64
-      runs-on: ubuntu-24.04
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      static-suffix: "-static"
-
-  test-linux-aarch64:
-    name: linux-aarch64
-    needs:
-      - prepare
-      - build-linux-aarch64
-    uses: ./.github/workflows/test.yml
-    with:
-      platform: linux-aarch64
-      bootjdk-platform: linux-aarch64
-      runs-on: ubuntu-24.04-arm
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      debug-suffix: -debug
-
-  test-macos-aarch64:
-    name: macos-aarch64
-    needs:
-      - prepare
-      - build-macos-aarch64
-    uses: ./.github/workflows/test.yml
-    with:
-      platform: macos-aarch64
-      bootjdk-platform: macos-aarch64
-      runs-on: macos-15
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      xcode-toolset-version: '16.4'
-      debug-suffix: -debug
-
-  test-windows-x64:
-    name: windows-x64
-    needs:
-      - prepare
-      - build-windows-x64
-    uses: ./.github/workflows/test.yml
-    with:
-      platform: windows-x64
-      bootjdk-platform: windows-x64
-      architecture: 'x86.x64'
-      runs-on: windows-2022
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      debug-suffix: -debug
-
-  test-windows-aarch64:
-    name: windows-aarch64
-    needs:
-      - prepare
-      - build-windows-aarch64
-    uses: ./.github/workflows/test.yml
-    with:
-      platform: windows-aarch64
-      bootjdk-platform: windows-aarch64
-      architecture: 'ARM64'
-      runs-on: windows-11-arm
-      dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      debug-suffix: -debug
