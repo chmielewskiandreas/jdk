@@ -25,8 +25,8 @@ dnl aarch64.ad:
 dnl 1. the arithmetic
 dnl 2. shift patterns
 dnl
-// BEGIN This section of the file is automatically generated. Do not edit --------------
-// This section is generated from aarch64_ad.m4
+
+// BEGIN Section generated automatically from aarch64_ad.m4. Do not edit ---------------
 
 define(`upcase', `translit(`$*', `a-z', `A-Z')')dnl
 define(`downcase', `translit(`$*', `A-Z', `a-z')')dnl
@@ -51,7 +51,6 @@ instruct $2$1_reg_$4_reg(iReg$1NoSp dst,
               $src3$$constant & ifelse($1,I,0x1f,0x3f));
   %}
 
-  ins_pipe(ialu_reg_reg_shift);
 %}
 ')dnl
 define(`NEG_SHIFT_INSN',
@@ -631,3 +630,5 @@ instruct bits_reverse_$1(iReg$1NoSp dst, iReg$1`'ORL2I($1) src)
 ')dnl
 BITS_REVERSE(I, rbitw)
 BITS_REVERSE(L, rbit)
+
+// END Section generated automatically from aarch64_ad.m4. Do not edit -----------------
