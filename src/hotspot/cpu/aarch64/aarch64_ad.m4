@@ -51,7 +51,6 @@ instruct $2$1_reg_$4_reg(iReg$1NoSp dst,
               $src3$$constant & ifelse($1,I,0x1f,0x3f));
   %}
 
-  ins_pipe(ialu_reg_reg_shift);
 %}
 ')dnl
 define(`NEG_SHIFT_INSN',
