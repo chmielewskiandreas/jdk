@@ -47,6 +47,7 @@ AC_DEFUN_ONCE([BASIC_SETUP_FUNDAMENTAL_TOOLS],
   UTIL_REQUIRE_PROGS(TR, tr)
   UTIL_REQUIRE_PROGS(UNAME, uname)
   UTIL_REQUIRE_PROGS(WC, wc)
+  UTIL_REQUIRE_PROGS(M4, m4)
 
   # Required tools with some special treatment
   UTIL_REQUIRE_SPECIAL(GREP, [AC_PROG_GREP])
@@ -82,6 +83,8 @@ AC_DEFUN_ONCE([BASIC_SETUP_TOOLS],
   UTIL_REQUIRE_PROGS(LS, ls)
   # gmkdir is known to be safe for concurrent invocations with -p flag.
   UTIL_REQUIRE_PROGS(MKDIR, gmkdir mkdir)
+  AC_MSG_NOTICE([M4 = $M4])
+  UTIL_REQUIRE_PROGS(M4, m4)
   UTIL_REQUIRE_PROGS(MKTEMP, mktemp)
   UTIL_REQUIRE_PROGS(MV, mv)
   UTIL_REQUIRE_PROGS(AWK, gawk nawk awk)
